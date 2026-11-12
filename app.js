@@ -22,16 +22,48 @@ $("btnTema").addEventListener("click", function(){
 });
 (function(){ var t = load(K.tema, null); if(t) document.documentElement.setAttribute("data-theme", t); })();
 
-/* ---------------- captura ---------------- */
+/* ---------------- captura ----------------
+   A fila é uma lista de trabalho, não um bloco de notas: cada anotação pendente
+   se classifica na própria linha e entra num lote. Canal e empresa ficam em
+   cima porque repetem; categoria, subcategoria e prioridade mudam por chamado. */
+var CLS_LINHA = ["categoria","subcategoria","prioridade"];
+var CLS_VAZIO = {categoria:"Categoria *", subcategoria:"Subcategoria *", prioridade:"Prioridade *"};
+
+function opcoesEnum(nome, valor, curto){
+  var mapa = enumRotulos[B.campo[nome]] || {};
+  var ids = Object.keys(mapa);
+  if(!ids.length) return null;
+  return ids.map(function(id){
+    var txt = curto ? rotuloCurto(mapa[id]) : mapa[id];
+    return '<option value="' + esc(id) + '"' + (String(valor) === id ? " selected" : "") +
+           ">" + esc(txt) + "</option>";
+  }).join("");
+}
+function selectLinha(nome, item, i){
+  /* a prioridade vem do Bitrix com o SLA inteiro escrito junto; numa linha
+     compacta isso não cabe, então aqui vai só o nome dela */
+  var ops = opcoesEnum(nome, item[nome], nome === "prioridade");
+  if(!ops) return '<span class="q-semlista">conecte o Bitrix</span>';
+  return '<select class="q-sel" data-cls="' + nome + '" data-i="' + i + '">' +
+         '<option value="">' + CLS_VAZIO[nome] + "</option>" + ops + "</select>";
+}
+/* o que falta nesta anotação para virar chamado */
+function faltaNaAnotacao(item){
+  var falta = CLS_LINHA.filter(function(n){ return !item[n]; })
+                       .map(function(n){ return CLS_VAZIO[n].replace(" *",""); });
+  if(!$("loteCanal").value) falta.push("Canal");
+  return falta;
+}
 function renderFila(){
   var ul = $("fila"); ul.innerHTML = "";
   $("filaVazia").hidden = fila.length > 0;
+  var pendentes = fila.filter(function(it){ return !it.chamado; }).length;
   /* o número na aba é o que ainda falta virar chamado, não o tamanho da lista */
-  $("pillFila").textContent = fila.filter(function(it){ return !it.chamado; }).length;
+  $("pillFila").textContent = pendentes;
   fila.forEach(function(item, i){
     var li = document.createElement("li");
     var virado = !!item.chamado;
-    if(virado) li.className = "feito";
+    li.className = virado ? "feito" : (item.erro ? "falhou" : "");
     var selo = "";
     if(virado){
       selo = item.chamado === "local"
@@ -41,15 +73,42 @@ function renderFila(){
           '/">virou o chamado #' + esc(item.chamado) + "</a>";
     }
     li.innerHTML =
-      '<div class="txt"><b>' + esc(item.quem || "sem nome") + '</b> — ' + esc(item.oque) +
-        (selo ? '<div class="virou">' + selo + "</div>" : "") + "</div>" +
-      '<div class="when">' + esc(item.hora) + '</div>' +
-      '<div class="acts">' +
-        (virado ? "" : '<button class="mini" data-virar="' + i + '">virar chamado</button>') +
-        '<button class="mini danger" data-del="' + i + '">apagar</button>' +
-      '</div>';
+      '<div class="q-top">' +
+        (virado ? '<span class="q-ok" aria-hidden="true">✓</span>'
+                : '<input type="checkbox" class="fsel" data-i="' + i + '"' +
+                  (item.marcada === false ? "" : " checked") + ' aria-label="incluir no lote">') +
+        '<div class="txt"><b>' + esc(item.quem || "sem nome") + '</b> — ' + esc(item.oque) +
+          (selo ? '<div class="virou">' + selo + "</div>" : "") + "</div>" +
+        '<div class="when">' + esc(item.hora) + "</div>" +
+        '<div class="acts">' +
+          (virado ? "" : '<button class="mini" data-virar="' + i + '">abrir completo</button>') +
+          '<button class="mini danger" data-del="' + i + '">apagar</button>' +
+        "</div>" +
+      "</div>" +
+      (virado ? "" :
+        '<div class="q-cls">' +
+          CLS_LINHA.map(function(n){ return selectLinha(n, item, i); }).join("") +
+          (item.erro ? '<span class="q-erro">' + esc(item.erro) + "</span>" : "") +
+        "</div>");
     ul.appendChild(li);
   });
+  $("btnLote").disabled = !pendentes;
+  pintarAvisoLote();
+}
+function pintarAvisoLote(){
+  var al = $("loteAviso"); if(!al) return;
+  var marcadas = fila.filter(function(it){ return !it.chamado && it.marcada !== false; });
+  if(!fila.filter(function(it){ return !it.chamado; }).length){
+    al.textContent = "Nenhuma anotação pendente.";
+    return;
+  }
+  if(!load(K.wh, "")){
+    al.textContent = "Sem webhook conectado: o lote precisa do Bitrix. Conecte na aba Bitrix.";
+    return;
+  }
+  var incompletas = marcadas.filter(function(it){ return faltaNaAnotacao(it).length; }).length;
+  al.textContent = marcadas.length + (marcadas.length === 1 ? " anotação marcada" : " anotações marcadas") +
+    (incompletas ? ", " + incompletas + " sem classificação completa." : ". Tudo classificado.");
 }
 /* qual anotação está sendo transformada agora. Guardamos o carimbo de hora
    porque o índice muda se alguém apagar outra anotação no meio do caminho. */
@@ -62,6 +121,19 @@ function marcarCapturaComoVirada(idChamado){
   capturaEmUso = null;
   save(K.fila, fila); renderFila();
 }
+/* a classificação fica guardada na anotação: classificar oito e ser
+   interrompido não pode custar o trabalho todo */
+$("fila").addEventListener("change", function(e){
+  var t = e.target;
+  if(t.classList.contains("q-sel")){
+    fila[parseInt(t.dataset.i, 10)][t.dataset.cls] = t.value;
+    save(K.fila, fila); pintarAvisoLote(); return;
+  }
+  if(t.classList.contains("fsel")){
+    fila[parseInt(t.dataset.i, 10)].marcada = t.checked;
+    save(K.fila, fila); pintarAvisoLote();
+  }
+});
 $("fila").addEventListener("click", function(e){
   var v = e.target.getAttribute("data-virar"), d = e.target.getAttribute("data-del");
   if(d !== null && d !== undefined){
@@ -90,6 +162,104 @@ function addCaptura(){
 $("capAdd").addEventListener("click", addCaptura);
 ["capQuem","capOque"].forEach(function(id){
   $(id).addEventListener("keydown", function(e){ if(e.key==="Enter") addCaptura(); });
+});
+
+/* ---------------- lote: várias anotações num clique ---------------- */
+function montarSelectsLote(){
+  [["loteCanal","canal","Canal de abertura *"], ["loteEmpresa","empresa","Empresa"]]
+    .forEach(function(par){
+      var sel = $(par[0]); if(!sel) return;
+      var ops = opcoesEnum(par[1], sel.value, false);
+      if(!ops) return;
+      var atual = sel.value;
+      sel.innerHTML = '<option value="">' + par[2] + "</option>" + ops;
+      sel.value = atual;
+    });
+  var cfg = load(K.lote, null);
+  if(cfg){
+    if(cfg.canal && $("loteCanal")) $("loteCanal").value = cfg.canal;
+    if(cfg.empresa && $("loteEmpresa")) $("loteEmpresa").value = cfg.empresa;
+  }
+}
+["loteCanal","loteEmpresa"].forEach(function(id){
+  $(id).addEventListener("change", function(){
+    save(K.lote, {canal:$("loteCanal").value, empresa:$("loteEmpresa").value});
+    pintarAvisoLote();
+  });
+});
+$("loteTodas").addEventListener("change", function(){
+  var marcar = this.checked;
+  fila.forEach(function(it){ if(!it.chamado) it.marcada = marcar; });
+  save(K.fila, fila); renderFila();
+});
+
+function camposDaAnotacao(item){
+  var c = B.campo, f = {};
+  f.title = String(item.oque || "").slice(0, 100);
+  f.opened = true;
+  f.categoryId = 27;
+  f[c.categoria]    = item.categoria;
+  f[c.subcategoria] = item.subcategoria;
+  f[c.prioridade]   = item.prioridade;
+  f[c.canal]        = $("loteCanal").value;
+  f[c.detalhes]     = item.oque || "";
+  if($("loteEmpresa").value) f[c.empresa] = $("loteEmpresa").value;
+  if(item.quem) f[c.solicitante] = item.quem;
+  return f;
+}
+var loteRodando = false;
+$("btnLote").addEventListener("click", function(){
+  if(loteRodando) return;                 /* dois cliques não criam dois chamados */
+  if(!load(K.wh, "")){
+    $("loteAviso").textContent = "Sem webhook conectado: o lote precisa do Bitrix. Conecte na aba Bitrix.";
+    return;
+  }
+  var alvos = [];
+  fila.forEach(function(it){ if(!it.chamado && it.marcada !== false) alvos.push(it); });
+  if(!alvos.length){ toast("Marque pelo menos uma anotação."); return; }
+
+  /* valida tudo ANTES de criar qualquer coisa: lote que para no meio deixa
+     metade criada e a pessoa sem saber onde parou */
+  var incompletas = alvos.filter(function(it){ return faltaNaAnotacao(it).length; });
+  if(incompletas.length){
+    incompletas.forEach(function(it){ it.erro = "falta " + faltaNaAnotacao(it).join(", "); });
+    save(K.fila, fila); renderFila();
+    $("loteAviso").textContent = "Não criei nada: " + incompletas.length +
+      (incompletas.length === 1 ? " anotação está" : " anotações estão") + " sem classificação completa.";
+    return;
+  }
+
+  loteRodando = true;
+  this.disabled = true;
+  var feitos = 0, falhas = 0, total = alvos.length;
+  $("loteAviso").textContent = "Criando 1 de " + total + "...";
+
+  alvos.reduce(function(p, item, k){
+    return p.then(function(){
+      $("loteAviso").textContent = "Criando " + (k + 1) + " de " + total + "...";
+      return bitrixCall("crm.item.add", {entityTypeId: B.tipo, fields: camposDaAnotacao(item)})
+        .then(function(j){
+          var novo = j.result && j.result.item ? j.result.item : null;
+          if(!novo || !novo.id) throw new Error("o Bitrix respondeu sem o número do chamado");
+          item.chamado = novo.id; item.erro = null; feitos++;
+          if(typeof marcarVisto === "function") marcarVisto(novo.id);
+        })
+        .catch(function(e){
+          /* a anotação continua pendente de propósito: ela precisa poder ser
+             tentada de novo depois que a causa for resolvida */
+          item.erro = e.message; falhas++;
+        })
+        .then(function(){ save(K.fila, fila); renderFila(); });
+    });
+  }, Promise.resolve()).then(function(){
+    loteRodando = false;
+    $("btnLote").disabled = false;
+    $("loteAviso").textContent =
+      (feitos ? feitos + (feitos === 1 ? " chamado criado" : " chamados criados") : "Nenhum chamado criado") +
+      (falhas ? ", " + falhas + (falhas === 1 ? " falhou — o erro está na linha." : " falharam — os erros estão nas linhas.") : ".");
+    if(feitos) toast(feitos + (feitos === 1 ? " chamado criado." : " chamados criados."));
+    if(feitos) carregarChamados();
+  });
 });
 
 /* ---------------- abrir chamado ---------------- */
@@ -125,7 +295,11 @@ function montarSelectsAbrir(){
     }
     return Promise.resolve();
   }
-  return carregarMetaCampos().then(pintarSelectsAbrir);   /* atualiza com o que veio agora */
+  return carregarMetaCampos().then(function(){
+    pintarSelectsAbrir();
+    /* a fila e a barra do lote usam as mesmas listas: redesenha com o que veio */
+    montarSelectsLote(); renderFila();
+  });
 }
 (function(){
   var se = $("fEtapa");

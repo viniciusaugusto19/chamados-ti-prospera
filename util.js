@@ -3,7 +3,7 @@
 var K = {fila:"ctip.fila", chamados:"ctip.chamados", wh:"ctip.wh", tema:"ctip.tema",
          jornada:"ctip.jornada", enums:"ctip.enums", usuarios:"ctip.usuarios",
          campos:"ctip.campos", ultimoId:"ctip.ultimoId", novos:"ctip.novos",
-         vigiar:"ctip.vigiar", eu:"ctip.eu"};
+         vigiar:"ctip.vigiar", eu:"ctip.eu", lote:"ctip.lote"};
 function load(k, fb){ try{ var v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; }catch(e){ return fb; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ toast("Não consegui salvar neste navegador."); } }
 
