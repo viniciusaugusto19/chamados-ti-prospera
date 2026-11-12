@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chamados TI Prospera</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar-in">
+    <div class="brand">Chamados TI<small>GRUPO PROSPERA</small></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="captura">Captura rápida<span class="pill" id="pillFila">0</span></button>
+      <button role="tab" aria-selected="false" data-tab="painel">Painel</button>
+      <button role="tab" aria-selected="false" data-tab="abrir">Abrir chamado</button>
+      <button role="tab" aria-selected="false" data-tab="documentar">Documentar</button>
+      <button role="tab" aria-selected="false" data-tab="conexao"><span class="dot off" id="connDot"></span>Bitrix</button>
+    </nav>
+    <button class="ghost" id="btnTema" type="button">Tema</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ CAPTURA ============ -->
+<section id="tab-captura">
+  <h2>Captura rápida</h2>
+  <p class="lead">Dez segundos no fim de cada atendimento: quem pediu e o que foi feito. Depois você transforma em chamado completo em lote, nas duas janelas da agenda. Fica salvo neste navegador, mesmo sem Bitrix conectado.</p>
+
+  <div class="card">
+    <h3>Anotar agora</h3>
+    <div class="capture-box">
+      <input type="text" id="capQuem" placeholder="Quem pediu — nome ou setor" autocomplete="off">
+      <input type="text" id="capOque" placeholder="O que foi feito — 3 ou 4 palavras" autocomplete="off">
+      <button class="primary" id="capAdd" type="button">Anotar</button>
+    </div>
+    <div class="hint">Enter em qualquer um dos campos também salva. O que já virou chamado fica marcado e sai da contagem da aba.</div>
+    <ul class="queue" id="fila"></ul>
+    <div class="empty" id="filaVazia">Nada na fila. O que você anotar aqui aparece nesta lista.</div>
+  </div>
+</section>
+
+<!-- ============ PAINEL ============ -->
+<section id="tab-painel" hidden>
+  <h2>Painel de acompanhamento</h2>
+  <p class="lead">Os chamados abertos por etapa, com o prazo de SLA contado em horas úteis a partir da abertura. Vermelho é prazo estourado.</p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Jornada usada no cálculo</h3>
+    <div class="grid g3">
+      <div class="field">
+        <label for="jorIni">Início</label>
+        <input type="text" id="jorIni" value="08:00" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label for="jorFim">Fim</label>
+        <input type="text" id="jorFim" value="17:00">
+      </div>
+      <div class="field">
+        <label for="jorDias">Dias úteis</label>
+        <select id="jorDias">
+          <option value="12345" selected>Segunda a sexta</option>
+          <option value="123456">Segunda a sábado</option>
+        </select>
+      </div>
+    </div>
+    <div class="hint">O SLA é contado em horas úteis, como na tabela do Bitrix — não em dias. Padrão 08:00&ndash;17:00 com 1h de intervalo (12:00&ndash;13:00), o que dá 8h líquidas por dia útil, igual à conta de &ldquo;1 dia útil&rdquo; da tabela. Feriados não são descontados. Ajuste se a jornada de vocês for outra — o painel recalcula.</div>
+  </div>
+
+  <div class="card">
+    <h3>Origem dos dados</h3>
+    <div style="display:flex;gap:11px;align-items:center;flex-wrap:wrap">
+      <button class="primary" id="btnCarregar" type="button">Carregar do Bitrix</button>
+      <label style="display:flex;align-items:center;gap:7px;font-weight:500;margin:0">
+        <input type="checkbox" id="chkConcluidos" style="width:auto"> mostrar concluídos
+      </label>
+      <span class="hint" id="statusCarga" style="margin-top:0">Conecte o Bitrix para puxar os chamados reais.</span>
+    </div>
+    <div class="aviso" id="avisoNomes" hidden></div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Chamado</th><th>Categoria</th><th>Prioridade</th>
+          <th>Etapa</th><th>Responsável</th><th class="num">Aberto em</th>
+          <th class="num">Aberto há</th><th class="num">SLA</th><th>Situação</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tbChamados"></tbody>
+    </table>
+    <div class="empty" id="painelVazio">
+      Sem chamados carregados. Conecte o Bitrix na aba <b>Bitrix</b> para puxar os abertos,
+      ou abra um chamado pela aba <b>Abrir chamado</b> para ver como o painel se comporta.
+    </div>
+  </div>
+</section>
+
+<!-- ============ ABRIR ============ -->
+<section id="tab-abrir" hidden>
+  <h2>Abrir chamado</h2>
+  <p class="lead">Os campos obrigatórios ficam aqui em cima. O resto está recolhido — abra só o que o chamado precisar.</p>
+
+  <div class="card">
+    <h3>Obrigatório</h3>
+    <div class="field" style="margin-bottom:13px">
+      <label for="fTitulo">Nome do chamado <span class="req">*</span></label>
+      <input type="text" id="fTitulo" maxlength="100" autocomplete="off"
+             placeholder="Em poucas palavras — ex.: Wi-Fi caindo na bancada">
+      <div class="hint">É por este nome que você reconhece o chamado na lista do painel. Seja específico: &ldquo;Notebook do Max não liga&rdquo; vale mais que &ldquo;problema no notebook&rdquo;.</div>
+    </div>
+    <div class="grid g2">
+      <div class="field">
+        <label for="fEmpresa">Empresa</label>
+        <select id="fEmpresa"></select>
+      </div>
+      <div class="field">
+        <label for="fCanal">Canal de abertura <span class="req">*</span></label>
+        <select id="fCanal"></select>
+      </div>
+      <div class="field">
+        <label for="fCategoria">Categoria do chamado <span class="req">*</span></label>
+        <select id="fCategoria"></select>
+      </div>
+      <div class="field">
+        <label for="fSubcategoria">Subcategoria do chamado <span class="req">*</span></label>
+        <select id="fSubcategoria"></select>
+      </div>
+      <div class="field">
+        <label for="fPrioridade">Prioridade <span class="req">*</span></label>
+        <select id="fPrioridade"></select>
+        <div class="hint" id="slaHint">Escolha a prioridade para ver o prazo.</div>
+      </div>
+    </div>
+    <div class="field" style="margin-top:13px">
+      <label for="fDetalhes">Detalhes do chamado <span class="req">*</span></label>
+      <textarea id="fDetalhes" placeholder="O que o solicitante relatou, com as palavras dele."></textarea>
+    </div>
+  </div>
+
+  <details class="fold">
+    <summary>Quem pediu</summary>
+    <div class="fold-body grid g2">
+      <div class="field">
+        <label for="fTipo">Tipo de ticket</label>
+        <select id="fTipo">
+          <option>Interno</option><option>Externo</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="fSolicitante">Solicitante</label>
+        <input type="text" id="fSolicitante" placeholder="Colaborador astro/fastco/spectro, ou usuário externo">
+      </div>
+      <div class="field">
+        <label for="fEquipamento">Equipamento</label>
+        <input type="text" id="fEquipamento" placeholder="Celular, notebook, ou equipamento do cliente">
+      </div>
+      <div class="field">
+        <label for="fResponsavel">Responsável pelo atendimento</label>
+        <input type="text" id="fResponsavel" placeholder="Padrão: quem está logado no Bitrix">
+      </div>
+    </div>
+  </details>
+
+  <details class="fold">
+    <summary>Etapa do funil</summary>
+    <div class="fold-body">
+      <div class="field">
+        <label for="fEtapa">Etapa</label>
+        <select id="fEtapa"></select>
+      </div>
+    </div>
+  </details>
+
+  <div class="row-end">
+    <span class="hint" id="abrirAviso"></span>
+    <button class="ghost" id="btnLimpar" type="button">Limpar</button>
+    <button class="primary" id="btnSalvarChamado" type="button">Salvar chamado</button>
+  </div>
+</section>
+
+<!-- ============ DOCUMENTAR ============ -->
+<section id="tab-documentar" hidden>
+  <h2>Documentar e resolver</h2>
+  <p class="lead">A seção RESOLUÇÃO do formulário do Bitrix, sozinha numa tela. Testes e próximos passos são listas: escreva e aperte Enter.</p>
+
+  <div class="card" style="padding:13px 16px;margin-bottom:16px">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <label for="dChamado" style="margin:0;white-space:nowrap">Chamado</label>
+      <select id="dChamado" style="flex:1;min-width:210px"><option value="">—</option></select>
+    </div>
+  </div>
+
+  <div class="sem-chamado" id="semChamado">
+    Escolha um chamado acima — ou clique numa linha do painel, que ele vem para cá já carregado.
+  </div>
+
+  <div id="dContexto" hidden>
+    <div class="ticket">
+      <div class="ticket-top">
+        <span class="ticket-id" id="tkId"></span>
+        <h3 class="ticket-title" id="tkTitulo"></h3>
+        <div class="chips" id="tkChips"></div>
+      </div>
+      <div class="sla" id="tkSla" hidden></div>
+      <div class="ticket-detalhe" id="tkDetalhe" hidden></div>
+    </div>
+
+    <div class="work">
+      <div>
+        <div class="bloco">
+          <h3>Testes realizados <span class="cnt" id="cntTestes">0</span></h3>
+          <div class="add-row">
+            <input type="text" id="dTesteIn" placeholder="O que você testou — Enter para incluir" autocomplete="off">
+            <button class="ghost" id="dTesteAdd" type="button">Incluir</button>
+          </div>
+          <ul class="items" id="listaTestes"></ul>
+          <div class="vazio-mini" id="vazioTestes">Nada registrado ainda.</div>
+        </div>
+
+        <div class="bloco">
+          <h3>Próximos passos <span class="cnt" id="cntPassos">0</span></h3>
+          <div class="add-row">
+            <input type="text" id="dPassoIn" placeholder="O que ainda falta — Enter para incluir" autocomplete="off">
+            <button class="ghost" id="dPassoAdd" type="button">Incluir</button>
+          </div>
+          <ul class="items" id="listaPassos"></ul>
+          <div class="vazio-mini" id="vazioPassos">Nada pendente.</div>
+        </div>
+
+        <div class="bloco">
+          <h3>Resolução</h3>
+          <textarea id="dResolucao" placeholder="O que resolveu o problema — isso serve de referência no próximo chamado igual."></textarea>
+          <div class="hint">Obrigatória para encerrar o chamado.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="bloco" id="cardEtapa" hidden>
+          <h3>Etapa</h3>
+          <select id="dEtapa" hidden></select>
+          <div class="trilho" id="trilho"></div>
+        </div>
+
+        <div class="bloco">
+          <h3>Pausa</h3>
+          <div class="field">
+            <label for="dPausaMotivo">Motivo</label>
+            <select id="dPausaMotivo"><option value="">—</option></select>
+          </div>
+          <div class="field" style="margin-top:11px">
+            <label for="dPausaIni">Pausado em</label>
+            <input type="datetime-local" id="dPausaIni">
+          </div>
+          <div class="field" style="margin-top:11px">
+            <label for="dPausaFim">Retomada</label>
+            <input type="datetime-local" id="dPausaFim">
+          </div>
+        </div>
+
+        <div class="bloco">
+          <h3>Dados do chamado</h3>
+          <dl class="meta-list" id="tkMeta"></dl>
+        </div>
+
+        <div class="bloco" id="cardHistorico" hidden>
+          <h3>Por onde passou</h3>
+          <ul class="hist" id="histLista"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="barra-acao">
+      <span class="msg" id="docAviso"></span>
+      <button class="ghost" id="btnCopiarDoc" type="button">Copiar texto</button>
+      <button class="ghost" id="btnEncerrar" type="button" hidden>Encerrar chamado</button>
+      <button class="primary" id="btnSalvarDoc" type="button">Salvar</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONEXÃO ============ -->
+<section id="tab-conexao" hidden>
+  <h2>Conexão com o Bitrix</h2>
+  <p class="lead">Sem isso a página funciona sozinha, guardando tudo neste navegador. Com isso ela lê e grava os chamados de verdade no portal.</p>
+
+  <div class="note">
+    <b>Não consegui testar essa conexão do meu lado</b> — o ambiente onde eu rodo não alcança o
+    <code>straylight.bitrix24.com.br</code>. Por isso o teste está aqui dentro: rode na sua máquina e
+    o diagnóstico abaixo diz exatamente o que aconteceu.
+  </div>
+
+  <div class="card">
+    <h3>Webhook de entrada</h3>
+    <div class="field">
+      <label for="wh">URL do webhook</label>
+      <input type="password" id="wh" placeholder="https://straylight.bitrix24.com.br/rest/1/xxxxxxxxxxxx/" autocomplete="off">
+      <div class="hint">
+        No Bitrix: <b>Aplicativos → Webhooks → Webhook de entrada</b>, com permissão de <b>CRM</b> e de <b>Usuários (user)</b>.
+        Sem o escopo de usuários, quem abriu e o responsável aparecem como número em vez de nome.
+        A URL fica guardada só neste navegador, na sua máquina — não vai para lugar nenhum e não está dentro deste arquivo.
+      </div>
+    </div>
+    <div class="row-end">
+      <button class="ghost" id="btnMostrar" type="button">Mostrar</button>
+      <button class="ghost" id="btnEsquecer" type="button">Esquecer</button>
+      <button class="primary" id="btnTestar" type="button">Testar conexão</button>
+    </div>
+    <div class="diag" id="diag">Aguardando teste.</div>
+  </div>
+
+  <div class="card">
+    <h3>O que o teste verifica</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Checagem</th><th>Se falhar</th></tr></thead>
+        <tbody>
+          <tr><td>O navegador consegue chamar o Bitrix de um arquivo local (CORS)</td>
+              <td>Precisa servir a página por <code>http://localhost</code> em vez de abrir o arquivo direto — eu te passo o comando.</td></tr>
+          <tr><td>O webhook existe e o token é válido</td>
+              <td>Gere outro webhook de entrada e cole aqui.</td></tr>
+          <tr><td>O webhook tem permissão de CRM</td>
+              <td>Edite o webhook no Bitrix e marque o escopo CRM.</td></tr>
+          <tr><td>O processo 1032 (Chamados) responde</td>
+              <td>Confirmo o <code>entityTypeId</code> com você e ajusto.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</main>
+
+
+<script src="config.js"></script>
+<script src="util.js"></script>
+<script src="bitrix.js"></script>
+<script src="painel.js"></script>
+<script src="doc.js"></script>
+<script src="app.js"></script>
+<script src="boot.js"></script>
+</body>
+</html>
