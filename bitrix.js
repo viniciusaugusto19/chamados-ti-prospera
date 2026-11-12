@@ -251,6 +251,7 @@ function carregarChamados(){
       var locais = chamados.filter(function(c){ return c.origem !== "bitrix"; });
       chamados = deBitrix.concat(locais);
       save(K.chamados, chamados);
+      dashUltima = new Date();        /* o dash mostra de quando são os dados */
       st.textContent = deBitrix.length + " chamados lidos do Bitrix em " +
         new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) + ".";
       renderPainel(); renderSelectChamados();
