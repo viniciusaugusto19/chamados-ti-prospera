@@ -193,6 +193,80 @@ details.fold>.fold-body{padding:0 14px 14px}
 .kpi span{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .kpi.crit b{color:var(--crit)} .kpi.warn b{color:var(--warn)} .kpi.good b{color:var(--good)}
 
+/* filtros: valem para a lista e para o dashboard ao mesmo tempo */
+.filtros{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.filtros input[type=text]{flex:1 1 220px;min-width:170px}
+.filtros select{flex:0 1 auto;width:auto;min-width:140px;max-width:220px}
+.filtros button{flex:none}
+
+/* abas internas do painel */
+.subtabs{display:flex;gap:4px;margin:0 0 16px;border-bottom:1px solid var(--line)}
+.subtabs button{
+  background:none;border:none;border-bottom:2px solid transparent;
+  padding:9px 15px;cursor:pointer;font-weight:600;font-size:.87rem;color:var(--muted);
+  margin-bottom:-1px;
+}
+.subtabs button:hover{color:var(--fg)}
+.subtabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--laranja)}
+
+/* barra do ao vivo */
+.vivo-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 16px}
+.vivo-txt{font-size:.84rem;white-space:nowrap}
+.vivo-txt b{font-variant-numeric:tabular-nums}
+.vivo-dot{
+  width:9px;height:9px;border-radius:50%;background:var(--good);flex:none;
+  box-shadow:0 0 0 0 var(--good);animation:pulsa 2s infinite;
+}
+.vivo-dot.off{background:var(--muted);animation:none;box-shadow:none}
+@keyframes pulsa{
+  0%{box-shadow:0 0 0 0 rgba(79,191,134,.5)}
+  70%{box-shadow:0 0 0 7px rgba(79,191,134,0)}
+  100%{box-shadow:0 0 0 0 rgba(79,191,134,0)}
+}
+@media (prefers-reduced-motion:reduce){.vivo-dot{animation:none}}
+
+/* grade do dashboard */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px;align-items:start}
+.dash-grid .bloco{margin-bottom:0}
+.dash-largo{grid-column:1/-1}
+
+/* barras: largura é volume, cor é risco */
+ul.barras{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+ul.barras li{display:flex;align-items:center;gap:10px;font-size:.83rem}
+ul.barras .bl{
+  flex:0 0 132px;color:var(--muted);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+}
+ul.barras .bw{flex:1;min-width:40px;height:16px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+ul.barras .bar{display:flex;height:100%;min-width:3px;border-radius:4px;overflow:hidden;transition:width .3s ease}
+ul.barras .seg{display:block;height:100%}
+ul.barras .seg.crit{background:var(--crit)}
+ul.barras .seg.warn{background:var(--warn)}
+ul.barras .seg.ok{background:var(--good)}
+ul.barras .seg.neutral{background:var(--muted);opacity:.55}
+ul.barras .bn{flex:0 0 26px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+
+/* fila de risco */
+ul.risco{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+ul.risco li{
+  display:flex;align-items:baseline;gap:12px;padding:8px 10px;font-size:.84rem;
+  border-left:3px solid var(--line);border-radius:0 6px 6px 0;
+}
+ul.risco li:hover{background:var(--surface-2)}
+ul.risco li.crit{border-left-color:var(--crit)}
+ul.risco li.warn{border-left-color:var(--warn)}
+ul.risco li.ok{border-left-color:var(--good)}
+.rk-t{flex:1 1 46%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.rk-q{flex:0 1 150px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.78rem}
+.rk-p{flex:0 0 92px;color:var(--muted);font-size:.78rem}
+.rk-r{flex:0 0 150px;text-align:right;font-variant-numeric:tabular-nums;font-size:.8rem;white-space:nowrap}
+ul.risco li.crit .rk-r{color:var(--crit);font-weight:600}
+ul.risco li.warn .rk-r{color:var(--warn);font-weight:600}
+@media (max-width:640px){
+  .rk-q,.rk-p{display:none}
+  ul.barras .bl{flex-basis:88px}
+}
+
 table{width:100%;border-collapse:collapse;font-size:.86rem}
 .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
 th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top}
