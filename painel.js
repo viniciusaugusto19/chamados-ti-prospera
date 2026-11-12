@@ -36,7 +36,7 @@ function renderPainel(){
   var lista = visiveis();
   var tb = $("tbChamados"); tb.innerHTML = "";
   $("painelVazio").hidden = lista.length > 0;
-  var n = {crit:0, warn:0, ok:0};
+  var n = {crit:0, warn:0, ok:0, pausa:0};
   lista.sort(function(a,b){
     var sa = situacao(a), sb = situacao(b);
     var pa = sa.limite ? sa.gasto/sa.limite : 0, pb = sb.limite ? sb.gasto/sb.limite : 0;
@@ -45,6 +45,7 @@ function renderPainel(){
   lista.forEach(function(c){
     var s = situacao(c);
     if(s.cls==="crit") n.crit++; else if(s.cls==="warn") n.warn++; else if(s.cls==="ok") n.ok++;
+    if(s.txt === "pausado") n.pausa++;
     var link = c.origem === "bitrix"
       ? '<a href="' + B.portal + '/crm/type/' + B.tipo + '/details/' + encodeURIComponent(c.id) + '/" target="_blank" rel="noopener" class="mini">abrir</a>'
       : '<span class="tag neutral">local</span>';
@@ -54,6 +55,8 @@ function renderPainel(){
     tr.title = "Abrir para documentar";
     tr.innerHTML =
       "<td>" + esc(c.titulo || ("#" + c.id)) + "</td>" +
+      "<td>" + esc(c.empresa || "—") + "</td>" +
+      "<td>" + esc(c.solicitante || "—") + "</td>" +
       "<td>" + esc(c.categoria || "—") + "</td>" +
       "<td>" + esc(rotuloCurto(c.prioridade)) + "</td>" +
       "<td>" + esc(c.etapa || "—") + "</td>" +
@@ -70,5 +73,7 @@ function renderPainel(){
     '<div class="kpi crit"><b>' + n.crit + "</b><span>estourados</span></div>" +
     '<div class="kpi warn"><b>' + n.warn + "</b><span>perto do prazo</span></div>" +
     '<div class="kpi good"><b>' + n.ok + "</b><span>no prazo</span></div>" +
-    '<div class="kpi"><b>' + fila.length + "</b><span>na fila de captura</span></div>";
+    '<div class="kpi"><b>' + n.pausa + "</b><span>pausados</span></div>" +
+    '<div class="kpi"><b>' + fila.filter(function(it){ return !it.chamado; }).length +
+      "</b><span>na fila de captura</span></div>";
 }

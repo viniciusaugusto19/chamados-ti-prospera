@@ -1,7 +1,8 @@
 "use strict";
 /* ---------------- storage ---------------- */
 var K = {fila:"ctip.fila", chamados:"ctip.chamados", wh:"ctip.wh", tema:"ctip.tema",
-         jornada:"ctip.jornada", enums:"ctip.enums", usuarios:"ctip.usuarios"};
+         jornada:"ctip.jornada", enums:"ctip.enums", usuarios:"ctip.usuarios",
+         campos:"ctip.campos"};
 function load(k, fb){ try{ var v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; }catch(e){ return fb; } }
 function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ toast("Não consegui salvar neste navegador."); } }
 
@@ -14,6 +15,10 @@ var chamados = load(K.chamados, []);
   var cache = load(K.enums, null);
   if(cache && typeof cache === "object"){
     for(var k in cache) enumRotulos[k] = cache[k];
+  }
+  var cm = load(K.campos, null);
+  if(cm && typeof cm === "object"){
+    for(var c in cm) campoMeta[c] = cm[c];
   }
   /* versões antigas gravavam "usuário 429" como se fosse o nome quando o
      user.get era recusado. Isso envenenava o cache: marcar o escopo user no

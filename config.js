@@ -37,7 +37,13 @@ var B = {
     passos:      "ufCrm11_1755615692022",
     pausaMotivo: "ufCrm11_1764332637629",
     pausaIni:    "ufCrm11_1755624999423",
-    pausaFim:    "ufCrm11_1755624321694"
+    pausaFim:    "ufCrm11_1755624321694",
+    solicitante: "ufCrm11_1751046908",   /* colaborador astro/fastco/spectro */
+    externo:     "ufCrm11_1751046553",   /* usuário externo */
+    equipInterno:"ufCrm11_1755634127",   /* celular, notebook */
+    anexos:      "ufCrm11_1755614491701",
+    anexos2:     "ufCrm11_1751290447491",/* evidência de aprovação */
+    primeiroAtend:"ufCrm11PrimeiroAtend"
   }
 };
 var etapasBitrix = {};   /* stageId -> {nome, semantica} */
@@ -59,6 +65,45 @@ function labelCategoria(v){ return labelEnum(B.campo.categoria, v); }
 
 /* campos de lista que a tela monta sozinha a partir do crm.item.fields */
 var CAMPOS_LISTA = ["categoria","subcategoria","prioridade","canal","empresa"];
+
+/* ficha de campo vinda do crm.item.fields: identificador -> rótulo e tipo.
+   É o que permite mostrar qualquer um dos 34 campos personalizados com o nome
+   que ele tem no portal, sem eu precisar adivinhar identificador aqui. */
+var campoMeta = {};
+function labelCampo(cid){
+  var m = campoMeta[cid];
+  return (m && m.titulo) || cid;
+}
+function ehArquivo(cid){
+  var m = campoMeta[cid];
+  return !!(m && m.tipo === "file");
+}
+/* campos que a ficha não repete porque já têm lugar próprio na tela */
+function temLugarProprio(cid){
+  var c = B.campo;
+  return cid === c.detalhes || cid === c.descricao || cid === c.resolucao ||
+         cid === c.testes || cid === c.passos ||
+         cid === c.pausaMotivo || cid === c.pausaIni || cid === c.pausaFim ||
+         cid === c.anexos || cid === c.anexos2 ||
+         /* CAMPOS_LISTA guarda nomes internos, não identificadores: comparar
+            direto deixaria Categoria e Prioridade aparecerem duas vezes */
+         CAMPOS_LISTA.map(function(n){ return c[n]; }).indexOf(cid) !== -1;
+}
+/* valor de um campo qualquer em texto que uma pessoa lê */
+function valorLegivel(cid, v){
+  if(v === null || v === undefined || v === "") return "";
+  if(Array.isArray(v)){
+    var p = v.map(function(x){ return valorLegivel(cid, x); }).filter(Boolean);
+    return p.join(", ");
+  }
+  var m = campoMeta[cid] || {};
+  if(m.tipo === "enumeration") return labelEnum(cid, v);
+  if(m.tipo === "boolean") return (v === "Y" || v === true || v === 1) ? "Sim" : "Não";
+  if(m.tipo === "employee" || m.tipo === "user") return labelUsuario(v);
+  if(m.tipo === "date" || m.tipo === "datetime") return dataHora(v) || String(v);
+  if(typeof v === "object") return "";   /* arquivo e vínculo têm trilha própria */
+  return String(v);
+}
 
 /* id do usuário -> nome. Hidratado do cache em util.js. */
 var usuarios = {};
