@@ -126,6 +126,8 @@ input[type=text],input[type=datetime-local],input[type=password],select,textarea
   background:var(--bg);color:var(--fg);
 }
 input::placeholder,textarea::placeholder{color:var(--muted);opacity:.75}
+/* sem isso a caixa marcada sai no azul padrão do navegador, que não é daqui */
+input[type=checkbox]{accent-color:var(--laranja)}
 textarea{resize:vertical;min-height:84px}
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{
   outline:2px solid var(--accent);outline-offset:1px
@@ -192,6 +194,36 @@ details.fold>.fold-body{padding:0 14px 14px}
 .kpi b{display:block;font-size:1.7rem;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .kpi span{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .kpi.crit b{color:var(--crit)} .kpi.warn b{color:var(--warn)} .kpi.good b{color:var(--good)}
+
+/* faixa de chamado novo: fora das abas, porque a vigia roda em todas elas.
+   Fica até ser dispensada de propósito — alerta que some sozinho é alerta
+   que você perde quando estava olhando para outro lado. */
+.faixa-novos{
+  background:var(--accent-soft);border:1px solid var(--laranja);
+  border-left-width:3px;border-radius:0 11px 11px 0;
+  padding:12px 16px;margin:0 0 18px;
+}
+.fx-topo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fx-topo b{font-size:.92rem}
+.fx-sino{
+  flex:none;width:19px;height:19px;border-radius:50%;background:var(--laranja);color:#fff;
+  font-size:.74rem;font-weight:700;display:flex;align-items:center;justify-content:center;
+}
+.fx-lista{list-style:none;margin:9px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.fx-lista li{display:flex;align-items:baseline;gap:9px;font-size:.84rem}
+.fx-lista a{color:var(--fg);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx-lista a:hover{text-decoration:underline;color:var(--accent)}
+.fx-lista li.meu a{font-weight:700}
+.selo-meu{
+  flex:none;background:var(--laranja);color:#fff;border-radius:999px;
+  padding:0 7px;font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+}
+.nv-p{margin-left:auto;color:var(--muted);font-size:.76rem;white-space:nowrap}
+.nv-mais{color:var(--muted);font-size:.78rem}
+.linha-vigia{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  margin-top:11px;padding-top:11px;border-top:1px solid var(--line);
+}
 
 /* filtros: valem para a lista e para o dashboard ao mesmo tempo */
 .filtros{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
