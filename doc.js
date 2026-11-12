@@ -54,6 +54,7 @@ function limparForm(){
   $("dPausaIni").value = ""; $("dPausaFim").value = "";
   $("dContexto").hidden = true; $("cardEtapa").hidden = true;
   if($("cardHistorico")) $("cardHistorico").hidden = true;
+  if($("cardComentarios")) $("cardComentarios").hidden = true;
   $("semChamado").hidden = false;
   $("btnEncerrar").hidden = true; $("docAviso").textContent = "";
   itemAtual = null;
@@ -114,8 +115,13 @@ function pintarChamado(d){
     $("tkSla").hidden = false;
   } else { $("tkSla").hidden = true; }
 
-  if(d.detalhes){ $("tkDetalhe").textContent = d.detalhes; $("tkDetalhe").hidden = false; }
-  else { $("tkDetalhe").hidden = true; }
+  /* Detalhes e Descrição são dois campos diferentes no Bitrix e os dois têm
+     texto corrido: aparecem um sob o outro, rotulados, em vez de só um deles */
+  var corpo = "";
+  if(d.detalhes)  corpo += '<div class="tk-bloco"><span>Detalhes</span><p>' + esc(d.detalhes) + "</p></div>";
+  if(d.descricao) corpo += '<div class="tk-bloco"><span>Descrição</span><p>' + esc(d.descricao) + "</p></div>";
+  $("tkDetalhe").innerHTML = corpo;
+  $("tkDetalhe").hidden = !corpo;
 
   /* linha sem valor sai da lista, em vez de virar uma fileira de travessões */
   var linhas = [
@@ -124,18 +130,80 @@ function pintarChamado(d){
     ["Subcategoria",      d.subcategoria],
     ["Prioridade",        d.prioridade ? rotuloCurto(d.prioridade) : ""],
     ["Canal de abertura", d.canal],
+    ["Solicitante",       d.solicitante],
+    ["Usuário externo",   d.externo],
     ["Equipamento",       d.equipamento],
+    ["Equipamento interno", d.equipInterno],
     ["Aberto por",        d.criadoPorTxt],
     ["Aberto em",         d.abertoTxt],
+    ["1º atendimento",    d.primeiroAtendTxt],
     ["Responsável",       d.responsavelTxt],
     ["Etapa atual",       d.etapa],
     ["Nesta etapa desde", d.movidoTxt],
     ["Última alteração",  d.atualizadoTxt]
   ];
+  /* tudo o que o chamado tem e não está na lista acima entra depois, com o
+     rótulo que o campo tem no portal. É o que faz campo que eu nunca mapeei
+     — e campo criado no Bitrix depois de hoje — aparecer sozinho. */
+  (d.extras || []).forEach(function(e){ linhas.push(e); });
   $("tkMeta").innerHTML = linhas
     .filter(function(l){ return l[1] !== undefined && l[1] !== null && String(l[1]).trim() !== ""; })
     .map(function(l){ return metaLinha(l[0], l[1]); }).join("");
+  pintarAnexos(d.anexos || []);
   $("dContexto").hidden = false;
+}
+/* anexos: links que abrem no portal, com a sessão do navegador */
+function pintarAnexos(lista){
+  var card = $("cardAnexos"), alvo = $("listaAnexos");
+  if(!card || !alvo) return;
+  $("cntAnexos").textContent = lista.length;
+  if(!lista.length){
+    alvo.innerHTML = '<div class="vazio-mini">Nenhum arquivo neste chamado.</div>';
+    return;
+  }
+  alvo.innerHTML = lista.map(function(a){
+    return '<li><a href="' + esc(a.url) + '" target="_blank" rel="noopener">' +
+           esc(a.nome) + "</a></li>";
+  }).join("");
+}
+/* comentários da linha do tempo do Bitrix */
+function pintarComentarios(id){
+  var card = $("cardComentarios"), alvo = $("listaComentarios");
+  if(!card || !alvo) return;
+  card.hidden = false;
+  alvo.innerHTML = '<div class="vazio-mini">Buscando no Bitrix...</div>';
+  comentarios(id).then(function(cs){
+    if(cs && cs.erro){
+      alvo.innerHTML = '<div class="vazio-mini">O portal não devolveu os comentários: ' +
+        esc(cs.erro) + "</div>";
+      $("cntComentarios").textContent = "—";
+      return;
+    }
+    $("cntComentarios").textContent = cs.length;
+    if(!cs.length){
+      alvo.innerHTML = '<div class="vazio-mini">Nenhum comentário neste chamado.</div>';
+      return;
+    }
+    /* o nome do autor pode não estar em cache ainda; busca e redesenha */
+    carregarUsuarios(cs.map(function(c){ return c.autor; })).then(function(){
+      alvo.innerHTML = cs.map(function(c){
+        var quem = labelUsuario(c.autor);
+        return '<li><div class="cm-topo"><b>' + esc(quem || "—") + "</b>" +
+               '<span>' + esc(dataHora(c.quando)) + "</span></div>" +
+               '<div class="cm-txt">' + esc(limpaBB(c.texto)) + "</div></li>";
+      }).join("");
+    });
+  });
+}
+/* o Bitrix guarda comentário com BBCode; sem isso a tela mostra [B]...[/B] */
+function limpaBB(t){
+  return String(t || "")
+    .replace(/\[\/?(?:b|i|u|s)\]/gi, "")
+    .replace(/\[url=([^\]]+)\]([^\[]*)\[\/url\]/gi, "$2 ($1)")
+    .replace(/\[\/?url\]/gi, "")
+    .replace(/\[br\]/gi, "\n")
+    .replace(/\[[^\]]+\]/g, "")
+    .trim();
 }
 /* linha do tempo das etapas, montada depois que o chamado já apareceu */
 function pintarHistorico(id){
@@ -176,6 +244,34 @@ function pintarHistorico(id){
 function anotaHistorico(txt){
   var alvo = $("histLista");
   if(alvo) alvo.insertAdjacentHTML("afterend", '<div class="vazio-mini">' + esc(txt) + "</div>");
+}
+/* campos que o chamado tem e a lista fixa da ficha não cobre. Vai pelo que o
+   item realmente trouxe, cruzado com os metadados do crm.item.fields, então
+   não depende de eu ter mapeado o identificador aqui no código. */
+var JA_NA_FICHA = ["solicitante","externo","equipInterno","equipamento","primeiroAtend"];
+function camposExtras(it){
+  var c = B.campo, fixos = JA_NA_FICHA.map(function(n){ return c[n]; });
+  var saida = [];
+  Object.keys(it || {}).forEach(function(cid){
+    if(cid.indexOf("ufCrm") !== 0) return;         /* campo padrão tem lugar próprio */
+    if(temLugarProprio(cid) || fixos.indexOf(cid) !== -1) return;
+    if(ehArquivo(cid)) return;                      /* anexo vai para o card de anexos */
+    var txt = valorLegivel(cid, it[cid]);
+    if(!txt) return;
+    saida.push([labelCampo(cid), txt]);
+  });
+  saida.sort(function(a, b){ return a[0].localeCompare(b[0], "pt-BR"); });
+  return saida;
+}
+/* todo campo de arquivo do chamado, não só os dois que eu conheço pelo nome */
+function anexosDoItem(it){
+  var c = B.campo, vistos = {}, saida = [];
+  [c.anexos, c.anexos2].forEach(function(cid){ vistos[cid] = true; });
+  Object.keys(it || {}).forEach(function(cid){ if(ehArquivo(cid)) vistos[cid] = true; });
+  Object.keys(vistos).forEach(function(cid){
+    arquivosDoCampo(it[cid]).forEach(function(a){ saida.push(a); });
+  });
+  return saida;
 }
 /* traz o chamado inteiro do Bitrix e preenche o formulário */
 function carregarItem(id){
@@ -229,10 +325,17 @@ function carregarItem(id){
       subcategoria: it[c.subcategoria],
       empresa: it[c.empresa],
       canal: it[c.canal],
+      solicitante: valorLegivel(c.solicitante, it[c.solicitante]),
+      externo: valorLegivel(c.externo, it[c.externo]),
       equipamento: [].concat(it[c.equipamento] || []).filter(Boolean).join(", "),
+      equipInterno: valorLegivel(c.equipInterno, it[c.equipInterno]),
+      primeiroAtendTxt: dataHora(it[c.primeiroAtend]),
+      extras: camposExtras(it),
+      anexos: anexosDoItem(it),
       prioridade: it[c.prioridade],
       etapa: et.nome || it.stageId,
       detalhes: it[c.detalhes],
+      descricao: it[c.descricao],
       abertoTxt: dataHora(it.createdTime) || "—",
       criadoPorTxt: labelUsuario(it.createdBy),
       responsavelTxt: labelUsuario(it.assignedById),
@@ -247,6 +350,7 @@ function carregarItem(id){
     });
     montarEtapaSelect(it.stageId);
     pintarHistorico(it.id);
+    pintarComentarios(it.id);
     $("btnEncerrar").hidden = !etapasLista.some(function(e){ return e.semantica === "S"; });
     $("docAviso").textContent = "";
   }).catch(function(e){
