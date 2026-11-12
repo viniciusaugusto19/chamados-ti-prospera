@@ -44,17 +44,29 @@ function carregarMetaCampos(){
   metaCampos = bitrixCall("crm.item.fields", {entityTypeId: B.tipo})
     .then(function(j){
       var fs = (j.result && j.result.fields) ? j.result.fields : {};
-      CAMPOS_LISTA.map(function(n){ return B.campo[n]; }).forEach(function(cid){
-        var d = fs[cid];
-        if(!d || !d.items) return;
-        var m = {};
-        d.items.forEach(function(i){ m[i.ID] = i.VALUE; });
-        enumRotulos[cid] = m;
+      /* guarda rótulo e tipo de TODOS os campos, não só dos que mapeei: é o que
+         deixa a ficha mostrar qualquer um dos 34 personalizados com o nome que
+         ele tem no portal. Campo novo criado lá aparece aqui sozinho. */
+      Object.keys(fs).forEach(function(cid){
+        var d = fs[cid] || {};
+        campoMeta[cid] = {
+          titulo: d.title || d.formLabel || d.listLabel || cid,
+          tipo: d.type,
+          multiplo: !!d.isMultiple
+        };
+        /* todo campo de lista ganha tradução de id para texto, não só os cinco
+           do formulário — senão campo novo volta a aparecer como número */
+        if(d.type === "enumeration" && d.items){
+          var m = {};
+          d.items.forEach(function(i){ m[i.ID] = i.VALUE; });
+          enumRotulos[cid] = m;
+        }
       });
       var d = fs[B.campo.pausaMotivo];
       motivosPausa = (d && d.items) ? d.items.map(function(i){ return {id:i.ID, nome:i.VALUE}; }) : [];
       /* guarda as listas para a tela continuar utilizável sem webhook */
       save(K.enums, enumRotulos);
+      save(K.campos, campoMeta);
     })
     .catch(function(){ /* segue sem os rótulos */ });
   return metaCampos;
@@ -152,6 +164,42 @@ function historicoResponsaveis(id){
     .catch(function(e){ return {erro: e.message}; });
 }
 
+/* comentários da linha do tempo. O método existe para processos inteligentes,
+   mas nem todo portal o expõe ao webhook — por isso devolve {erro} em vez de
+   quebrar, e a seção se explica na tela. */
+function comentarios(id){
+  return bitrixCall("crm.timeline.comment.list", {
+    filter: {ENTITY_ID: id, ENTITY_TYPE_ID: B.tipo},
+    order: {ID: "ASC"}
+  }).then(function(j){
+    var itens = (j.result && j.result.items) ? j.result.items :
+                (Array.isArray(j.result) ? j.result : []);
+    return itens.map(function(c){
+      return {
+        quando: c.CREATED || c.created,
+        autor:  c.AUTHOR_ID || c.authorId,
+        texto:  c.COMMENT || c.comment || "",
+        arquivos: c.FILES || c.files || []
+      };
+    });
+  }).catch(function(e){ return {erro: e.message}; });
+}
+
+/* anexos: o valor de um campo tipo file vem como objeto (ou lista deles) com a
+   url dentro. O download sai pelo portal, com a sessão de quem está no
+   navegador — por isso o link abre em aba nova em vez de baixar daqui. */
+function arquivosDoCampo(v){
+  if(!v) return [];
+  var lista = Array.isArray(v) ? v : [v];
+  return lista.map(function(f){
+    if(!f || typeof f !== "object") return null;
+    var u = f.urlMachine || f.url || f.downloadUrl || "";
+    if(!u) return null;
+    if(u.indexOf("http") !== 0) u = B.portal + u;
+    return {nome: f.name || f.NAME || "arquivo", url: u};
+  }).filter(Boolean);
+}
+
 function carregarChamados(){
   var st = $("statusCarga");
   if(!load(K.wh, "")){ st.textContent = "Sem webhook. Conecte na aba Bitrix."; return; }
@@ -164,7 +212,8 @@ function carregarChamados(){
       start: start,
       select: ["id","title","stageId","createdTime","createdBy","updatedTime",
                "updatedBy","movedTime","movedBy","assignedById",
-               campos.categoria, campos.prioridade, campos.detalhes]
+               campos.categoria, campos.prioridade, campos.detalhes,
+               campos.empresa, campos.solicitante, campos.externo]
     }).then(function(j){
       var itens = (j.result && j.result.items) ? j.result.items : [];
       todos = todos.concat(itens);
@@ -183,6 +232,10 @@ function carregarChamados(){
           categoria: labelCategoria(it[campos.categoria]),
           prioridade: labelPrioridade(it[campos.prioridade]),
           detalhes: it[campos.detalhes],
+          empresa: labelEnum(campos.empresa, it[campos.empresa]),
+          /* quem pediu pode ser colaborador interno ou usuário externo */
+          solicitante: valorLegivel(campos.solicitante, it[campos.solicitante]) ||
+                       valorLegivel(campos.externo, it[campos.externo]),
           etapa: et.nome || it.stageId,
           semantica: et.semantica,
           aberto: it.createdTime,
