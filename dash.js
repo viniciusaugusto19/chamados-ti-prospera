@@ -3,10 +3,15 @@
    Lê exatamente a mesma lista filtrada do painel. Nada aqui busca dados por
    conta própria: quem busca é carregarChamados(), e o relógio só decide
    quando pedir de novo. */
-var DASH_SEG = 60;          /* de quanto em quanto tempo volta ao Bitrix */
-var dashPausado = false;
-var dashSeg = 0;
+var DASH_SEG = 60;          /* intervalo com a janela à frente */
+var DASH_BG  = 180;         /* e com ela minimizada ou atrás de outra coisa */
+var dashSeg = 0;            /* segundos desde a última leitura */
+var tick = 0;
 var dashUltima = null;      /* quando os dados foram lidos do portal */
+/* vigiar é o interruptor único: o botão Pausar do dash e a caixa de seleção
+   lá em cima mexem no mesmo estado, e ele sobrevive ao F5 */
+var vigiando = load(K.vigiar, true) !== false;
+function intervaloAtual(){ return document.hidden ? DASH_BG : DASH_SEG; }
 
 function dashVisivel(){
   var s = $("sub-dash");
@@ -131,32 +136,158 @@ function renderDash(){
     : "ainda não";
 }
 
+/* ---------------- alerta de chamado novo ----------------
+   A detecção é pelo maior id já visto, não por comparar listas: id de processo
+   inteligente só cresce, então "id maior que o último" é novo sem depender de
+   a página ter guardado os 150 anteriores. */
+var novosPendentes = load(K.novos, []);
+function idNum(x){ var n = parseInt(x, 10); return isNaN(n) ? 0 : n; }
+function ehMeu(c){ return euId !== null && String(c.responsavelId) === String(euId); }
+
+/* chama isto quando a própria página cria um chamado: senão ele volta na
+   leitura seguinte e a tela alerta sobre algo que você acabou de abrir */
+function marcarVisto(id){
+  var ultimo = load(K.ultimoId, null);
+  save(K.ultimoId, Math.max(idNum(id), ultimo === null ? 0 : ultimo));
+}
+function detectarNovos(lista){
+  if(!lista || !lista.length) return;
+  var maior = lista.reduce(function(m, c){ return Math.max(m, idNum(c.id)); }, 0);
+  var ultimo = load(K.ultimoId, null);
+  /* primeiríssima carga: só marca o ponto de partida. Sem isso a página
+     anunciaria os 150 chamados que já existiam como se fossem novos. */
+  if(ultimo === null || ultimo === undefined){ save(K.ultimoId, maior); return; }
+  var novos = lista.filter(function(c){ return idNum(c.id) > ultimo; });
+  save(K.ultimoId, Math.max(maior, ultimo));
+  if(!novos.length) return;
+  novos.forEach(function(c){
+    novosPendentes.push({id:c.id, titulo:c.titulo, meu:ehMeu(c),
+                         prioridade:rotuloCurto(c.prioridade), quando:new Date().toISOString()});
+  });
+  /* os seus primeiro, e dentro de cada grupo o mais recente no topo */
+  novosPendentes.sort(function(a,b){
+    if(a.meu !== b.meu) return a.meu ? -1 : 1;
+    return idNum(b.id) - idNum(a.id);
+  });
+  save(K.novos, novosPendentes);
+  pintarFaixaNovos();
+  notificarSistema(novos);
+}
+function pintarFaixaNovos(){
+  var f = $("faixaNovos"), pill = $("pillNovos");
+  if(pill){
+    pill.textContent = novosPendentes.length;
+    pill.hidden = !novosPendentes.length;
+  }
+  if(!f) return;
+  if(!novosPendentes.length){ f.hidden = true; return; }
+  var meus = novosPendentes.filter(function(n){ return n.meu; }).length;
+  var tit = novosPendentes.length === 1 ? "1 chamado novo no Bitrix"
+                                        : novosPendentes.length + " chamados novos no Bitrix";
+  if(meus) tit += " — " + (meus === 1 ? "1 é seu" : meus + " são seus");
+  $("faixaTitulo").textContent = tit;
+  $("faixaLista").innerHTML = novosPendentes.slice(0, 8).map(function(n){
+    return '<li' + (n.meu ? ' class="meu"' : "") + '>' +
+      '<a href="' + B.portal + "/crm/type/" + B.tipo + "/details/" + encodeURIComponent(n.id) +
+      '/" target="_blank" rel="noopener">#' + esc(n.id) + " " + esc(n.titulo || "(sem nome)") + "</a>" +
+      (n.meu ? '<span class="selo-meu">seu</span>' : "") +
+      '<span class="nv-p">' + esc(n.prioridade) + "</span></li>";
+  }).join("") + (novosPendentes.length > 8
+      ? '<li class="nv-mais">e mais ' + (novosPendentes.length - 8) + "</li>" : "");
+  f.hidden = false;
+}
+function limparNovos(){
+  novosPendentes = [];
+  save(K.novos, novosPendentes);
+  pintarFaixaNovos();
+}
+function notificarSistema(novos){
+  if(!("Notification" in window) || Notification.permission !== "granted") return;
+  try{
+    var tit = novos.length === 1 ? "Novo chamado de TI" : novos.length + " chamados novos de TI";
+    var corpo = novos.slice(0, 3).map(function(c){
+      return (ehMeu(c) ? "(seu) " : "") + "#" + c.id + " " + (c.titulo || "sem nome");
+    }).join("\n");
+    if(novos.length > 3) corpo += "\n… e mais " + (novos.length - 3);
+    var nt = new Notification(tit, {body: corpo, tag: "ctip-novos", renotify: true});
+    nt.onclick = function(){
+      window.focus();
+      /* um chamado só: abre ele. Vários: traz a pessoa para o painel. */
+      if(novos.length === 1) window.open(B.portal + "/crm/type/" + B.tipo + "/details/" + novos[0].id + "/", "_blank");
+      else document.querySelector('nav.tabs button[data-tab="painel"]').click();
+      nt.close();
+    };
+  }catch(e){ /* navegador recusou a notificação; a faixa na página continua */ }
+}
+function pintarEstadoAlerta(){
+  var b = $("btnNotificar"), s = $("estadoAlerta");
+  if(!b || !s) return;
+  if(!("Notification" in window)){
+    b.hidden = true; s.textContent = "Este navegador não tem notificação de sistema; o aviso aparece só na página.";
+    return;
+  }
+  if(Notification.permission === "granted"){
+    b.hidden = true;
+    s.textContent = "Notificação do Windows ligada. O aviso chega mesmo com o navegador atrás de outra janela — desde que esta página siga aberta.";
+  } else if(Notification.permission === "denied"){
+    b.hidden = true;
+    s.textContent = "Você bloqueou a notificação para este site. Para religar: cadeado na barra de endereço → Notificações → Permitir.";
+  } else {
+    b.hidden = false;
+    s.textContent = "O aviso aparece na página. Para receber também fora do navegador, autorize a notificação.";
+  }
+}
+function pintarVigia(){
+  var cx = $("chkVigiar"), bt = $("dashPausar");
+  if(cx) cx.checked = vigiando;
+  if(bt) bt.textContent = vigiando ? "Pausar" : "Retomar";
+  if($("dashVivo")) $("dashVivo").classList.toggle("off", !vigiando);
+  if($("dashConta")) $("dashConta").textContent = vigiando ? intervaloAtual() + "s" : "pausado";
+}
+function trocarVigia(novo){
+  vigiando = novo;
+  save(K.vigiar, vigiando);
+  if(vigiando) dashSeg = 0;
+  pintarVigia();
+}
+
 /* ---------------- relógio ----------------
-   Um único setInterval de 1s cuida de três coisas com ritmos diferentes:
-   o contador na tela (1s), o recálculo do tempo decorrido (10s, porque SLA é
-   contado em horas e não vale redesenhar tudo a cada segundo) e a releitura
-   no Bitrix (DASH_SEG). Só anda com a aba aberta: dash escondido não gasta
-   chamada de API nem bateria. */
+   Um setInterval de 1s cuida de ritmos diferentes: o contador (1s), o
+   recálculo do tempo decorrido no dash (10s, porque SLA é contado em horas e
+   não vale redesenhar tudo a cada segundo) e a releitura no Bitrix.
+   A releitura roda em qualquer aba da página, senão o alerta só acharia você
+   quando você já estivesse olhando o painel. Com a janela em segundo plano o
+   intervalo abre para DASH_BG: menos chamada quando ninguém está vendo. */
 setInterval(function(){
-  if($("dashConta")) $("dashConta").textContent = dashPausado ? "pausado" : (DASH_SEG - (dashSeg % DASH_SEG)) + "s";
-  if(!dashVisivel() || dashPausado) return;
+  tick++;
+  if(dashVisivel() && vigiando && tick % 10 === 0) renderDash();
+  if(!vigiando) return;
   dashSeg++;
-  if(dashSeg % 10 === 0) renderDash();
-  if(dashSeg % DASH_SEG === 0){
+  var alvo = intervaloAtual();
+  if($("dashConta")) $("dashConta").textContent = Math.max(0, alvo - dashSeg) + "s";
+  if(dashSeg >= alvo){
+    dashSeg = 0;
     if(load(K.wh, "")) carregarChamados();   /* ele chama renderPainel, que chama renderDash */
-    else renderDash();
+    else if(dashVisivel()) renderDash();
   }
 }, 1000);
 
-if($("dashPausar")) $("dashPausar").addEventListener("click", function(){
-  dashPausado = !dashPausado;
-  this.textContent = dashPausado ? "Retomar" : "Pausar";
-  $("dashVivo").classList.toggle("off", dashPausado);
-  /* sem esperar o próximo segundo: quem clicou tem de ver que parou */
-  $("dashConta").textContent = dashPausado ? "pausado" : DASH_SEG + "s";
-  if(!dashPausado){ dashSeg = 0; renderDash(); }
-});
+if($("dashPausar")) $("dashPausar").addEventListener("click", function(){ trocarVigia(!vigiando); });
+if($("chkVigiar")) $("chkVigiar").addEventListener("change", function(){ trocarVigia(this.checked); });
 if($("dashAgora")) $("dashAgora").addEventListener("click", function(){
   dashSeg = 0;
   if(load(K.wh, "")) carregarChamados(); else renderDash();
 });
+if($("btnNotificar")) $("btnNotificar").addEventListener("click", function(){
+  if(!("Notification" in window)) return;
+  /* pedir permissão exige um clique da pessoa; por isso o botão existe */
+  Notification.requestPermission().then(pintarEstadoAlerta, pintarEstadoAlerta);
+});
+if($("faixaFechar")) $("faixaFechar").addEventListener("click", limparNovos);
+if($("faixaIr")) $("faixaIr").addEventListener("click", function(){
+  document.querySelector('nav.tabs button[data-tab="painel"]').click();
+  limparNovos();
+});
+pintarVigia();
+pintarEstadoAlerta();
+pintarFaixaNovos();
