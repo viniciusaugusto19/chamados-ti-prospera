@@ -164,10 +164,21 @@ details.fold>.fold-body{padding:0 14px 14px}
 .capture-box input[type=text]{flex:1 1 260px}
 .queue{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
 .queue li{
-  display:flex;gap:11px;align-items:flex-start;
+  display:flex;flex-direction:column;gap:9px;
   background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;
 }
+.q-top{display:flex;gap:11px;align-items:flex-start}
+.q-top .fsel{flex:none;width:auto;margin-top:3px}
+.q-ok{flex:none;color:var(--good);font-weight:700;margin-top:1px}
+/* classificação na própria linha: o lote se monta sem sair da tela */
+.q-cls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-left:26px}
+.q-cls .q-sel{width:auto;flex:1 1 160px;min-width:130px;max-width:230px;padding:6px 9px;font-size:.8rem}
+.q-semlista{color:var(--muted);font-size:.78rem}
+.q-erro{color:var(--crit);font-size:.78rem;flex:1 1 100%}
+.queue li.falhou{border-color:var(--crit)}
 .queue li.feito{opacity:.7;border-style:dashed}
+.lote-topo{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.lote-topo select{width:auto;flex:0 1 auto;min-width:170px;max-width:260px}
 .queue li.feito .txt > b{font-weight:600}
 .queue .virou{margin-top:6px}
 .queue .virou .tag{text-decoration:none}
