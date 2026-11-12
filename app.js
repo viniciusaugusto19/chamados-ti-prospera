@@ -218,6 +218,9 @@ $("btnSalvarChamado").addEventListener("click", function(){
         '/details/' + esc(novo.id) + '/" target="_blank" rel="noopener">abrir no portal</a>';
       toast("Chamado #" + novo.id + " criado.");
       marcarCapturaComoVirada(novo.id);   /* a anotação não volta para a fila */
+      /* este chamado nasceu aqui: não faz sentido a página alertar sobre ele
+         na releitura de daqui a pouco */
+      if(typeof marcarVisto === "function") marcarVisto(novo.id);
       $("fTitulo").value = ""; $("fDetalhes").value = "";
       $("fSolicitante").value = ""; $("fEquipamento").value = "";
       carregarChamados();
