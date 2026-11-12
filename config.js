@@ -105,6 +105,11 @@ function valorLegivel(cid, v){
   return String(v);
 }
 
+/* quem é o dono do webhook. O webhook de entrada carrega a identidade de quem
+   o criou, então profile devolve a pessoa que está usando a página. É o que
+   permite destacar "este chamado é seu" no alerta. */
+var euId = null;
+
 /* id do usuário -> nome. Hidratado do cache em util.js. */
 var usuarios = {};
 function labelUsuario(id){
