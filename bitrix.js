@@ -137,6 +137,21 @@ function carregarUsuarios(ids){
    .catch(function(e){ motivoSemNomes = e.message; avisarSemNomes(); });
 }
 
+/* quem é o dono deste webhook. Uma chamada só, guardada: o webhook não muda
+   de dono no meio do caminho. */
+function carregarEu(){
+  var salvo = load(K.eu, null);
+  if(salvo && salvo.id){ euId = salvo.id; return Promise.resolve(); }
+  return bitrixCall("profile", {}).then(function(j){
+    var r = (j && j.result) ? j.result : {};
+    if(!r.ID) return;
+    euId = r.ID;
+    var nome = [r.NAME, r.LAST_NAME].filter(Boolean).join(" ").trim();
+    save(K.eu, {id: r.ID, nome: nome});
+    if(nome && usuarios[r.ID] === undefined){ usuarios[r.ID] = nome; save(K.usuarios, usuarios); }
+  }).catch(function(){ /* sem profile, o alerta só perde o destaque de "seu" */ });
+}
+
 /* por onde o chamado passou. Este método existe para processos inteligentes. */
 function historicoEtapas(id){
   return bitrixCall("crm.stagehistory.list", {
@@ -222,6 +237,7 @@ function carregarChamados(){
   }
   carregarEtapas()
     .then(function(){ return carregarMetaCampos(); })
+    .then(function(){ return carregarEu(); })
     .then(function(){ return pagina(0); })
     .then(function(){
       var deBitrix = todos.map(function(it){
@@ -252,6 +268,8 @@ function carregarChamados(){
       chamados = deBitrix.concat(locais);
       save(K.chamados, chamados);
       dashUltima = new Date();        /* o dash mostra de quando são os dados */
+      /* compara com o que já tínhamos antes de a tela se redesenhar */
+      if(typeof detectarNovos === "function") detectarNovos(deBitrix);
       st.textContent = deBitrix.length + " chamados lidos do Bitrix em " +
         new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) + ".";
       renderPainel(); renderSelectChamados();
