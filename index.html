@@ -52,7 +52,100 @@
   <h2>Painel de acompanhamento</h2>
   <p class="lead">Os chamados abertos por etapa, com o prazo de SLA contado em horas úteis a partir da abertura. Vermelho é prazo estourado.</p>
 
+  <div class="card" style="padding:13px 16px">
+    <div style="display:flex;gap:11px;align-items:center;flex-wrap:wrap">
+      <button class="primary" id="btnCarregar" type="button">Carregar do Bitrix</button>
+      <label style="display:flex;align-items:center;gap:7px;font-weight:500;margin:0">
+        <input type="checkbox" id="chkConcluidos" style="width:auto"> mostrar concluídos
+      </label>
+      <span class="hint" id="statusCarga" style="margin-top:0">Conecte o Bitrix para puxar os chamados reais.</span>
+    </div>
+    <div class="aviso" id="avisoNomes" hidden></div>
+  </div>
+
   <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Filtros</h3>
+    <div class="filtros">
+      <input type="text" id="fltBusca" placeholder="Buscar no nome do chamado" autocomplete="off">
+      <select id="fltEmpresa"><option value="">Todas as empresas</option></select>
+      <select id="fltResp"><option value="">Todos os responsáveis</option></select>
+      <select id="fltPrioridade"><option value="">Todas as prioridades</option></select>
+      <select id="fltCategoria"><option value="">Todas as categorias</option></select>
+      <select id="fltEtapa"><option value="">Todas as etapas</option></select>
+      <select id="fltSituacao">
+        <option value="">Qualquer situação</option>
+        <option value="crit">Estourados</option>
+        <option value="warn">Perto do prazo</option>
+        <option value="ok">No prazo</option>
+        <option value="neutral">Pausados ou sem SLA</option>
+      </select>
+      <button class="ghost" id="fltLimpar" type="button">Limpar filtros</button>
+    </div>
+    <div class="hint" id="fltResumo">Sem filtro: mostrando tudo que foi carregado.</div>
+  </div>
+
+  <div class="subtabs" role="tablist">
+    <button role="tab" aria-selected="true" data-sub="lista" type="button">Lista</button>
+    <button role="tab" aria-selected="false" data-sub="dash" type="button">Dashboard ao vivo</button>
+  </div>
+
+  <div id="sub-dash" hidden>
+    <div class="card vivo-bar">
+      <span class="vivo-dot" id="dashVivo" aria-hidden="true"></span>
+      <span class="vivo-txt">Relendo o Bitrix em <b id="dashConta">60s</b></span>
+      <span class="hint" style="margin:0">Dados de <b id="dashLidoEm">ainda não</b>. Só atualiza com esta aba aberta.</span>
+      <span style="flex:1"></span>
+      <button class="ghost" id="dashAgora" type="button">Atualizar agora</button>
+      <button class="ghost" id="dashPausar" type="button">Pausar</button>
+    </div>
+
+    <div class="dash-grid">
+      <div class="bloco dash-largo">
+        <h3>Fila de risco <span class="cnt" id="cntRisco">0</span></h3>
+        <ul class="risco" id="dashRisco"></ul>
+        <div class="hint">Do prazo mais apertado para o mais folgado. Clique numa linha da Lista para documentar.</div>
+      </div>
+
+      <div class="bloco">
+        <h3>Carga por pessoa</h3>
+        <ul class="barras" id="dashPessoas"></ul>
+      </div>
+
+      <div class="bloco">
+        <h3>Por etapa do funil</h3>
+        <ul class="barras" id="dashEtapas"></ul>
+      </div>
+
+      <div class="bloco">
+        <h3>Por prioridade</h3>
+        <ul class="barras" id="dashPrioridades"></ul>
+      </div>
+
+      <div class="bloco">
+        <h3>Idade dos chamados</h3>
+        <ul class="barras" id="dashIdade"></ul>
+        <div class="hint">Em dias de calendário, não em horas úteis: aqui a pergunta é há quanto tempo está parado.</div>
+      </div>
+
+      <div class="bloco">
+        <h3>Por empresa</h3>
+        <ul class="barras" id="dashEmpresas"></ul>
+      </div>
+
+      <div class="bloco">
+        <h3>Por categoria</h3>
+        <ul class="barras" id="dashCategorias"></ul>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:12px">
+      A cor dentro de cada barra é a situação de SLA: vermelho estourado, âmbar perto do prazo,
+      verde no prazo, cinza pausado ou sem SLA. O tamanho é o volume.
+    </div>
+  </div>
+
+  <div id="sub-lista">
 
   <div class="card">
     <h3>Jornada usada no cálculo</h3>
@@ -76,18 +169,6 @@
     <div class="hint">O SLA é contado em horas úteis, como na tabela do Bitrix — não em dias. Padrão 08:00&ndash;17:00 com 1h de intervalo (12:00&ndash;13:00), o que dá 8h líquidas por dia útil, igual à conta de &ldquo;1 dia útil&rdquo; da tabela. Feriados não são descontados. Ajuste se a jornada de vocês for outra — o painel recalcula.</div>
   </div>
 
-  <div class="card">
-    <h3>Origem dos dados</h3>
-    <div style="display:flex;gap:11px;align-items:center;flex-wrap:wrap">
-      <button class="primary" id="btnCarregar" type="button">Carregar do Bitrix</button>
-      <label style="display:flex;align-items:center;gap:7px;font-weight:500;margin:0">
-        <input type="checkbox" id="chkConcluidos" style="width:auto"> mostrar concluídos
-      </label>
-      <span class="hint" id="statusCarga" style="margin-top:0">Conecte o Bitrix para puxar os chamados reais.</span>
-    </div>
-    <div class="aviso" id="avisoNomes" hidden></div>
-  </div>
-
   <div class="tablewrap">
     <table>
       <thead>
@@ -104,6 +185,8 @@
       ou abra um chamado pela aba <b>Abrir chamado</b> para ver como o painel se comporta.
     </div>
   </div>
+
+  </div><!-- /sub-lista -->
 </section>
 
 <!-- ============ ABRIR ============ -->
@@ -360,6 +443,7 @@
 <script src="util.js"></script>
 <script src="bitrix.js"></script>
 <script src="painel.js"></script>
+<script src="dash.js"></script>
 <script src="doc.js"></script>
 <script src="app.js"></script>
 <script src="boot.js"></script>
