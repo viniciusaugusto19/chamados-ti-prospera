@@ -14,8 +14,9 @@ Array.prototype.forEach.call(tabs, function(b){
 
 $("btnTema").addEventListener("click", function(){
   var r = document.documentElement;
-  var escuro = r.getAttribute("data-theme")==="dark" ||
-    (!r.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  /* o escuro é o padrão da página, não o do sistema: a identidade é preto com
+     verde, e esta tela fica aberta o dia inteiro ao lado do Bitrix */
+  var escuro = r.getAttribute("data-theme") !== "light";
   r.setAttribute("data-theme", escuro ? "light" : "dark");
   save(K.tema, escuro ? "light" : "dark");
 });
