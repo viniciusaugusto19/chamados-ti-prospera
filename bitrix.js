@@ -74,6 +74,10 @@ function carregarMotivosPausa(){
 /* nomes dos usuários: o Bitrix devolve só o id em quem abriu e no responsável.
    Vai em lote (batch) para não virar uma chamada por pessoa, e fica guardado. */
 var motivoSemNomes = "";
+/* quem o portal recusou nesta visita. Fica só na memória, de propósito: se
+   fosse para o cache, "usuário 429" viraria o nome definitivo e corrigir o
+   escopo do webhook depois não adiantaria nada. */
+var semNome = {};
 function avisarSemNomes(){
   var alvo = $("avisoNomes");
   if(!alvo) return;
@@ -88,7 +92,8 @@ function carregarUsuarios(ids){
   var faltam = [];
   (ids || []).forEach(function(id){
     if(id === null || id === undefined || id === "" || String(id) === "0") return;
-    if(usuarios[id] === undefined && faltam.indexOf(String(id)) === -1) faltam.push(String(id));
+    if(usuarios[id] !== undefined || semNome[id]) return;
+    if(faltam.indexOf(String(id)) === -1) faltam.push(String(id));
   });
   if(!faltam.length) return Promise.resolve();
   var lotes = [];
@@ -106,10 +111,12 @@ function carregarUsuarios(ids){
           var nome = u ? [u.NAME, u.LAST_NAME].filter(Boolean).join(" ").trim() : "";
           if(nome || (u && u.EMAIL)){ usuarios[id] = nome || u.EMAIL; return; }
           /* sem nome: guardar o motivo vale mais do que exibir "usuário 429" e
-             calar. O caso comum é o webhook sem o escopo "user" marcado. */
+             calar. O caso comum é o webhook sem o escopo "user" marcado.
+             Marca só nesta visita — labelUsuario já mostra "usuário N" sozinho
+             quando o nome falta, e assim a próxima visita tenta de novo. */
           var e = errs["u" + id];
           if(e) motivoSemNomes = e.error_description || e.error || String(e);
-          usuarios[id] = "usuário " + id;
+          semNome[id] = true;
         });
       });
     });

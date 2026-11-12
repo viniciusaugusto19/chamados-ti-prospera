@@ -15,9 +15,18 @@ var chamados = load(K.chamados, []);
   if(cache && typeof cache === "object"){
     for(var k in cache) enumRotulos[k] = cache[k];
   }
+  /* versões antigas gravavam "usuário 429" como se fosse o nome quando o
+     user.get era recusado. Isso envenenava o cache: marcar o escopo user no
+     webhook depois não surtia efeito, porque a página nunca mais tentava
+     buscar. Entram só os nomes de verdade; o resto é descartado e refeito. */
   var us = load(K.usuarios, null);
   if(us && typeof us === "object"){
-    for(var u in us) usuarios[u] = us[u];
+    var limpou = false;
+    for(var u in us){
+      if(/^usuário \d+$/.test(String(us[u]))){ limpou = true; continue; }
+      usuarios[u] = us[u];
+    }
+    if(limpou) save(K.usuarios, usuarios);
   }
 })();
 
