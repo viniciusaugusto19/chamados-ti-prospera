@@ -14,7 +14,6 @@ function situacao(c){
   var gasto = horasUteis(new Date(c.aberto), new Date());
   if(!s) return {cls:"neutral", txt:"sem SLA", gasto:gasto, limite:0};
   var pct = s.h ? gasto / s.h : 0;
-  var base = {gasto:gasto, limite:s.h};
   if(c.semantica === "S" || c.etapa === "Concluir")
     return {cls:"ok", txt:"concluído", gasto:gasto, limite:s.h};
   if(c.semantica === "F")
@@ -25,14 +24,86 @@ function situacao(c){
   if(pct >= 0.75) return {cls:"warn", txt:"perto do prazo", gasto:gasto, limite:s.h};
   return {cls:"ok", txt:"no prazo", gasto:gasto, limite:s.h};
 }
+
+/* ---------------- filtros ----------------
+   Valem para a Lista e para o Dashboard ao mesmo tempo, de propósito: filtro
+   que só pega numa das abas faz a outra mentir sem avisar. */
+var FILTROS = {
+  fltEmpresa:    function(c){ return c.empresa; },
+  fltResp:       function(c){ return labelUsuario(c.responsavelId); },
+  fltPrioridade: function(c){ return rotuloCurto(c.prioridade); },
+  fltCategoria:  function(c){ return c.categoria; },
+  fltEtapa:      function(c){ return c.etapa; }
+};
+function montarFiltros(){
+  Object.keys(FILTROS).forEach(function(id){
+    var sel = $(id); if(!sel) return;
+    var atual = sel.value;
+    var vistos = {};
+    chamados.forEach(function(c){
+      var v = FILTROS[id](c);
+      if(v) vistos[v] = true;
+    });
+    var nomes = Object.keys(vistos).sort(function(a,b){ return a.localeCompare(b, "pt-BR"); });
+    var zero = sel.querySelector('option[value=""]');
+    sel.innerHTML = "";
+    sel.appendChild(zero || new Option(sel.dataset.todos || "Todos", ""));
+    nomes.forEach(function(n){ sel.appendChild(new Option(n, n)); });
+    /* mantém a escolha mesmo que a lista tenha sido redesenhada */
+    sel.value = (nomes.indexOf(atual) !== -1) ? atual : "";
+  });
+}
+function passaFiltros(c){
+  var ok = true;
+  Object.keys(FILTROS).forEach(function(id){
+    var sel = $(id);
+    if(sel && sel.value && FILTROS[id](c) !== sel.value) ok = false;
+  });
+  if(!ok) return false;
+  var busca = $("fltBusca") ? $("fltBusca").value.trim().toLowerCase() : "";
+  if(busca && String(c.titulo || "").toLowerCase().indexOf(busca) === -1) return false;
+  var sit = $("fltSituacao") ? $("fltSituacao").value : "";
+  if(sit && situacao(c).cls !== sit) return false;
+  return true;
+}
+function filtroAtivo(){
+  var n = 0;
+  Object.keys(FILTROS).forEach(function(id){ if($(id) && $(id).value) n++; });
+  if($("fltBusca") && $("fltBusca").value.trim()) n++;
+  if($("fltSituacao") && $("fltSituacao").value) n++;
+  return n;
+}
 function visiveis(){
   var mostrarTodos = $("chkConcluidos") && $("chkConcluidos").checked;
   return chamados.filter(function(c){
-    if(mostrarTodos) return true;
-    return !(c.semantica === "S" || c.semantica === "F" || c.etapa === "Concluir");
+    if(!mostrarTodos && (c.semantica === "S" || c.semantica === "F" || c.etapa === "Concluir")) return false;
+    return passaFiltros(c);
   });
 }
+Object.keys(FILTROS).concat(["fltBusca","fltSituacao"]).forEach(function(id){
+  var el = $(id);
+  if(el) el.addEventListener(el.tagName === "INPUT" ? "input" : "change", renderPainel);
+});
+if($("fltLimpar")) $("fltLimpar").addEventListener("click", function(){
+  Object.keys(FILTROS).forEach(function(id){ if($(id)) $(id).value = ""; });
+  if($("fltBusca")) $("fltBusca").value = "";
+  if($("fltSituacao")) $("fltSituacao").value = "";
+  renderPainel();
+});
+
+/* ---------------- abas internas do painel ---------------- */
+Array.prototype.forEach.call(document.querySelectorAll(".subtabs button"), function(b){
+  b.addEventListener("click", function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".subtabs button"), function(o){
+      o.setAttribute("aria-selected", o === b ? "true" : "false");
+      var s = $("sub-" + o.dataset.sub); if(s) s.hidden = (o !== b);
+    });
+    if(b.dataset.sub === "dash") renderDash();
+  });
+});
+
 function renderPainel(){
+  montarFiltros();
   var lista = visiveis();
   var tb = $("tbChamados"); tb.innerHTML = "";
   $("painelVazio").hidden = lista.length > 0;
@@ -76,4 +147,13 @@ function renderPainel(){
     '<div class="kpi"><b>' + n.pausa + "</b><span>pausados</span></div>" +
     '<div class="kpi"><b>' + fila.filter(function(it){ return !it.chamado; }).length +
       "</b><span>na fila de captura</span></div>";
+
+  var f = filtroAtivo();
+  if($("fltResumo")) $("fltResumo").textContent = f
+    ? lista.length + " de " + chamados.length + " chamados, com " +
+      (f > 1 ? f + " filtros ativos." : "1 filtro ativo.")
+    : "Sem filtro: mostrando tudo que foi carregado.";
+
+  /* o dashboard lê a mesma lista filtrada, então é redesenhado junto */
+  if(typeof renderDash === "function") renderDash();
 }
