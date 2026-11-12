@@ -18,7 +18,7 @@
     </div>
     <nav class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="captura">Captura rápida<span class="pill" id="pillFila">0</span></button>
-      <button role="tab" aria-selected="false" data-tab="painel">Painel</button>
+      <button role="tab" aria-selected="false" data-tab="painel">Painel<span class="pill" id="pillNovos" hidden>0</span></button>
       <button role="tab" aria-selected="false" data-tab="abrir">Abrir chamado</button>
       <button role="tab" aria-selected="false" data-tab="documentar">Documentar</button>
       <button role="tab" aria-selected="false" data-tab="conexao"><span class="dot off" id="connDot"></span>Bitrix</button>
@@ -28,6 +28,18 @@
 </header>
 
 <main>
+
+<!-- faixa de chamado novo: fica fora das abas porque a vigia roda em todas -->
+<div class="faixa-novos" id="faixaNovos" role="status" hidden>
+  <div class="fx-topo">
+    <span class="fx-sino" aria-hidden="true">!</span>
+    <b id="faixaTitulo"></b>
+    <span style="flex:1"></span>
+    <button class="mini" id="faixaIr" type="button">Ver no painel</button>
+    <button class="mini" id="faixaFechar" type="button">Dispensar</button>
+  </div>
+  <ul class="fx-lista" id="faixaLista"></ul>
+</div>
 
 <!-- ============ CAPTURA ============ -->
 <section id="tab-captura">
@@ -59,6 +71,13 @@
         <input type="checkbox" id="chkConcluidos" style="width:auto"> mostrar concluídos
       </label>
       <span class="hint" id="statusCarga" style="margin-top:0">Conecte o Bitrix para puxar os chamados reais.</span>
+    </div>
+    <div class="linha-vigia">
+      <label style="display:flex;align-items:center;gap:7px;font-weight:500;margin:0">
+        <input type="checkbox" id="chkVigiar" style="width:auto" checked> vigiar chamados novos
+      </label>
+      <button class="ghost" id="btnNotificar" type="button" hidden>Ativar notificação do Windows</button>
+      <span class="hint" id="estadoAlerta" style="margin-top:0;flex:1 1 260px"></span>
     </div>
     <div class="aviso" id="avisoNomes" hidden></div>
   </div>
@@ -95,7 +114,7 @@
     <div class="card vivo-bar">
       <span class="vivo-dot" id="dashVivo" aria-hidden="true"></span>
       <span class="vivo-txt">Relendo o Bitrix em <b id="dashConta">60s</b></span>
-      <span class="hint" style="margin:0">Dados de <b id="dashLidoEm">ainda não</b>. Só atualiza com esta aba aberta.</span>
+      <span class="hint" style="margin:0">Dados de <b id="dashLidoEm">ainda não</b>. Em segundo plano, relê a cada 3 min.</span>
       <span style="flex:1"></span>
       <button class="ghost" id="dashAgora" type="button">Atualizar agora</button>
       <button class="ghost" id="dashPausar" type="button">Pausar</button>
