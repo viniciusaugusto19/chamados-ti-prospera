@@ -44,7 +44,7 @@
 <!-- ============ CAPTURA ============ -->
 <section id="tab-captura">
   <h2>Captura rápida</h2>
-  <p class="lead">Dez segundos no fim de cada atendimento: quem pediu e o que foi feito. Depois você transforma em chamado completo em lote, nas duas janelas da agenda. Fica salvo neste navegador, mesmo sem Bitrix conectado.</p>
+  <p class="lead">Dez segundos no fim de cada atendimento: quem pediu e o que foi feito. Nas duas janelas da agenda você classifica a fila inteira aqui mesmo, na linha de cada anotação, e cria todos os chamados num clique. Fica salvo neste navegador, mesmo sem Bitrix conectado.</p>
 
   <div class="card">
     <h3>Anotar agora</h3>
@@ -53,9 +53,27 @@
       <input type="text" id="capOque" placeholder="O que foi feito — 3 ou 4 palavras" autocomplete="off">
       <button class="primary" id="capAdd" type="button">Anotar</button>
     </div>
-    <div class="hint">Enter em qualquer um dos campos também salva. O que já virou chamado fica marcado e sai da contagem da aba.</div>
+    <div class="hint">Enter em qualquer um dos campos também salva.</div>
+  </div>
+
+  <div class="card">
+    <h3>Virar em chamados</h3>
+    <div class="lote-topo">
+      <span class="hint" style="margin:0">Vale para todas as marcadas:</span>
+      <select id="loteCanal"><option value="">Canal de abertura *</option></select>
+      <select id="loteEmpresa"><option value="">Empresa</option></select>
+      <span style="flex:1"></span>
+      <label style="display:flex;align-items:center;gap:7px;font-weight:500;margin:0">
+        <input type="checkbox" id="loteTodas" style="width:auto"> marcar todas
+      </label>
+      <button class="primary" id="btnLote" type="button">Criar chamados</button>
+    </div>
+    <div class="hint" id="loteAviso"></div>
+
     <ul class="queue" id="fila"></ul>
-    <div class="empty" id="filaVazia">Nada na fila. O que você anotar aqui aparece nesta lista.</div>
+    <div class="empty" id="filaVazia">Nada na fila. O que você anotar acima aparece nesta lista.</div>
+    <div class="hint">O que já virou chamado fica marcado com o número, perde a caixa de seleção
+      e sai da contagem da aba — é o que impede abrir o mesmo chamado duas vezes.</div>
   </div>
 </section>
 
