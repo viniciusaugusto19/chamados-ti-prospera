@@ -131,6 +131,10 @@ function renderDash(){
   pintarGrupos("dashCategorias", agrupar(lista, function(c){ return c.categoria; }),
     "Nenhuma categoria com chamado.");
 
+  /* o cartão de export mostra contagem e datas do recorte; ele tem que
+     acompanhar os mesmos filtros, senão anuncia um número e exporta outro */
+  if(typeof pintarExport === "function") pintarExport();
+
   if($("dashLidoEm")) $("dashLidoEm").textContent = dashUltima
     ? dashUltima.toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit", second:"2-digit"})
     : "ainda não";

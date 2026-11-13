@@ -227,7 +227,7 @@ function carregarChamados(){
       start: start,
       select: ["id","title","stageId","createdTime","createdBy","updatedTime",
                "updatedBy","movedTime","movedBy","assignedById",
-               campos.categoria, campos.prioridade, campos.detalhes,
+               campos.categoria, campos.subcategoria, campos.prioridade, campos.detalhes,
                campos.empresa, campos.solicitante, campos.externo]
     }).then(function(j){
       var itens = (j.result && j.result.items) ? j.result.items : [];
@@ -246,6 +246,7 @@ function carregarChamados(){
           id: it.id,
           titulo: it.title,
           categoria: labelCategoria(it[campos.categoria]),
+          subcategoria: labelEnum(campos.subcategoria, it[campos.subcategoria]),
           prioridade: labelPrioridade(it[campos.prioridade]),
           detalhes: it[campos.detalhes],
           empresa: labelEnum(campos.empresa, it[campos.empresa]),
