@@ -107,7 +107,8 @@ function sufixo(p){
 /* ---------------- arquivo 1: os chamados ---------------- */
 var COL_CHAMADOS = ["id","titulo","empresa","solicitante","categoria","subcategoria",
   "prioridade","etapa","responsavel","aberto_em","aberto_por","ultima_mudanca_em",
-  "concluido_em","horas_uteis","sla_horas","pct_do_prazo","situacao","dentro_do_prazo",
+  "primeiro_atend_em","horas_ate_1o_atend","concluido_em","horas_uteis","sla_horas",
+  "pct_do_prazo","situacao","dentro_do_prazo","tempo_trabalhado_min",
   "idade_dias","aberto_agora","aberto_no_periodo","concluido_no_periodo","link"];
 
 function linhaChamado(c, p){
@@ -127,12 +128,18 @@ function linhaChamado(c, p){
     dataHora(c.aberto),
     labelUsuario(c.criadoPor),
     dataHora(c.atualizado),
+    c.primeiroAtend ? dataHora(c.primeiroAtend) : "",
+    /* vazio = ninguém respondeu ainda, ou o campo não foi preenchido no portal.
+       Zero seria mentira nos dois casos. */
+    horasAteAtender(c) === null ? "" : csvNum(horasAteAtender(c)),
     fim ? dataHora(fim) : "",
     csvNum(s.gasto),
     s.limite || "",
     s.limite ? csvNum(s.gasto / s.limite * 100, 0) : "",
     s.txt,
     s.limite ? sn(s.gasto <= s.limite) : "",   /* sem SLA não dá para dizer sim nem não */
+    /* só deste navegador: o cronômetro não existe no Bitrix */
+    (typeof minutosTrabalhados === "function" ? minutosTrabalhados(c.id) : 0) || "",
     csvNum(diasCorridos(c.aberto)),
     sn(r.abertoAgora), sn(r.abertoNo), sn(r.concluidoNo),
     c.origem === "bitrix" ? (B.portal + "/crm/type/" + B.tipo + "/details/" + c.id + "/") : ""
@@ -165,6 +172,14 @@ function linhaGrupo(bloco, rotulo, itens){
 function blocoGrupos(L, bloco, grupos){
   if(!grupos.length){ L.push(csvLinha([bloco, "— nenhum —", 0, "", "", "", ""])); return; }
   grupos.forEach(function(g){ L.push(linhaGrupo(bloco, g.rotulo, g.itens)); });
+}
+/* mediana, não média: um chamado esquecido por três semanas puxa a média para
+   um número que não descreve nenhum atendimento real */
+function mediana(ns){
+  var v = ns.slice().sort(function(a,b){ return a - b; });
+  if(!v.length) return 0;
+  var m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m-1] + v[m]) / 2;
 }
 function pctTexto(parte, total){
   if(!total) return "—";
@@ -217,6 +232,16 @@ function exportarResumo(){
   res("Concluídos no período com SLA definido", comSla.length);
   res("Concluídos no período dentro do prazo", noPrazo.length);
   res("% dentro do prazo (meta 90%)", pctTexto(noPrazo.length, comSla.length));
+  /* a régua do primeiro atendimento, que a resolução não mostra */
+  var semAtend = abertos.filter(function(c){ return horasAteAtender(c) === null; });
+  var comAtend = base.filter(function(c){ return horasAteAtender(c) !== null; });
+  res("Abertos que ninguém atendeu ainda", semAtend.length);
+  res("Mediana de horas até o 1º atendimento", comAtend.length
+    ? csvNum(mediana(comAtend.map(horasAteAtender))) : "—");
+  var min = base.reduce(function(t, c){
+    return t + (typeof minutosTrabalhados === "function" ? minutosTrabalhados(c.id) : 0);
+  }, 0);
+  res("Tempo cronometrado neste navegador (min)", min || "—");
 
   blocoGrupos(L, "Abertos por pessoa",     agrupar(abertos, function(c){ return labelUsuario(c.responsavelId); }));
   blocoGrupos(L, "Abertos por etapa",      agrupar(abertos, function(c){ return c.etapa; }));
@@ -236,6 +261,12 @@ function exportarResumo(){
   faixas.forEach(function(f){
     L.push(linhaGrupo("Abertos por idade", f.r,
       abertos.filter(function(c){ return f.t(diasCorridos(c.aberto)); })));
+  });
+
+  /* primeiro atendimento também vai em faixa, na ordem delas */
+  FAIXAS_ATEND.forEach(function(f){
+    L.push(linhaGrupo("Primeiro atendimento", f.r,
+      abertos.filter(function(c){ return f.t(horasAteAtender(c)); })));
   });
 
   blocoGrupos(L, "Concluídos no período por pessoa",
