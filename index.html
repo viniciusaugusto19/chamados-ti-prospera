@@ -106,11 +106,11 @@
     <h3>Filtros</h3>
     <div class="filtros">
       <input type="text" id="fltBusca" placeholder="Buscar no nome do chamado" autocomplete="off">
-      <select id="fltEmpresa"><option value="">Todas as empresas</option></select>
-      <select id="fltResp"><option value="">Todos os responsáveis</option></select>
-      <select id="fltPrioridade"><option value="">Todas as prioridades</option></select>
-      <select id="fltCategoria"><option value="">Todas as categorias</option></select>
-      <select id="fltEtapa"><option value="">Todas as etapas</option></select>
+      <select id="fltEmpresa" data-nome="empresa"><option value="">Todas as empresas</option></select>
+      <select id="fltResp" data-nome="responsável"><option value="">Todos os responsáveis</option></select>
+      <select id="fltPrioridade" data-nome="prioridade"><option value="">Todas as prioridades</option></select>
+      <select id="fltCategoria" data-nome="categoria"><option value="">Todas as categorias</option></select>
+      <select id="fltEtapa" data-nome="etapa"><option value="">Todas as etapas</option></select>
       <select id="fltSituacao">
         <option value="">Qualquer situação</option>
         <option value="crit">Estourados</option>
@@ -179,6 +179,40 @@
     <div class="hint" style="margin-top:12px">
       A cor dentro de cada barra é a situação de SLA: vermelho estourado, âmbar perto do prazo,
       verde no prazo, cinza pausado ou sem SLA. O tamanho é o volume.
+    </div>
+
+    <div class="card exportar" id="cardExport">
+      <h3>Exportar para o relatório semanal</h3>
+      <div class="exp-linha">
+        <label class="exp-rot" for="expPeriodo">Período</label>
+        <select id="expPeriodo">
+          <option value="sexta">Semana de sexta a sexta</option>
+          <option value="7">Últimos 7 dias</option>
+          <option value="mes">Mês corrente</option>
+          <option value="tudo">Tudo que foi carregado</option>
+          <option value="custom">Escolher as datas</option>
+        </select>
+        <input type="date" id="expDe" aria-label="Data inicial" hidden>
+        <input type="date" id="expAte" aria-label="Data final" hidden>
+      </div>
+      <div class="exp-linha">
+        <span class="exp-rot">Levar no arquivo</span>
+        <label class="cx"><input type="checkbox" id="expAbertos" checked> Abertos agora</label>
+        <label class="cx"><input type="checkbox" id="expNovos" checked> Abertos no período</label>
+        <label class="cx"><input type="checkbox" id="expConcluidos" checked> Concluídos no período</label>
+      </div>
+      <div class="hint" id="expResumoTxt"></div>
+      <div class="exp-linha exp-botoes">
+        <button class="ghost" id="btnExpChamados" type="button">Baixar chamados (CSV)</button>
+        <button class="primary" id="btnExpResumo" type="button">Baixar resumo (CSV)</button>
+      </div>
+      <div class="hint">
+        São dois arquivos: a <b>lista</b> tem uma linha por chamado, o <b>resumo</b> tem os números
+        já somados por pessoa, etapa, prioridade, empresa, categoria e idade. Os dois trazem horas
+        úteis gastas, limite de SLA e se o chamado coube no prazo — contas que o export do Bitrix
+        não faz. A data de conclusão usada é a última mudança de etapa do chamado, que para um
+        chamado fechado é o fecho.
+      </div>
     </div>
   </div>
 
@@ -481,6 +515,7 @@
 <script src="bitrix.js"></script>
 <script src="painel.js"></script>
 <script src="dash.js"></script>
+<script src="relatorio.js"></script>
 <script src="doc.js"></script>
 <script src="app.js"></script>
 <script src="boot.js"></script>
