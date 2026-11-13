@@ -299,6 +299,7 @@ function montarSelectsAbrir(){
     pintarSelectsAbrir();
     /* a fila e a barra do lote usam as mesmas listas: redesenha com o que veio */
     montarSelectsLote(); renderFila();
+    if(typeof montarSelectsAplicar === "function") montarSelectsAplicar();
   });
 }
 (function(){
