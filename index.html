@@ -164,6 +164,7 @@
 
   <div class="subtabs" role="tablist">
     <button role="tab" aria-selected="true" data-sub="lista" type="button">Lista</button>
+    <button role="tab" aria-selected="false" data-sub="kanban" type="button">Kanban</button>
     <button role="tab" aria-selected="false" data-sub="dash" type="button">Dashboard ao vivo</button>
   </div>
 
@@ -259,6 +260,26 @@
         não faz. A data de conclusão usada é a última mudança de etapa do chamado, que para um
         chamado fechado é o fecho.
       </div>
+    </div>
+  </div>
+
+  <div id="sub-kanban" hidden>
+    <div class="kb-confirma" id="kbConfirma" role="alert" hidden>
+      <span id="kbPergunta"></span>
+      <button class="primary" id="kbSim" type="button">Mover</button>
+      <button class="ghost" id="kbNao" type="button">Cancelar</button>
+    </div>
+    <div class="aviso" id="kbErro" style="margin:0 0 12px" hidden></div>
+    <div class="kanban" id="kbQuadro"></div>
+    <div class="empty" id="kbVazio" hidden>
+      Sem chamados carregados. Clique em <b>Carregar do Bitrix</b> aqui em cima.
+    </div>
+    <div class="hint" style="margin-top:10px">
+      Uma coluna por etapa do funil, com os mesmos filtros e contadores da lista. Dentro da coluna,
+      o prazo mais apertado fica em cima. Arraste um cartão para outra coluna para mudar a etapa —
+      a página pergunta antes de gravar no Bitrix. Clicar no cartão abre o chamado para documentar.
+      Encerrar é pela ficha, porque exige a resolução. No celular não dá para arrastar: mude a etapa
+      pela ficha.
     </div>
   </div>
 
@@ -603,6 +624,7 @@
 <script src="bitrix.js"></script>
 <script src="painel.js"></script>
 <script src="dash.js"></script>
+<script src="kanban.js"></script>
 <script src="relatorio.js"></script>
 <script src="importar.js"></script>
 <script src="doc.js"></script>
