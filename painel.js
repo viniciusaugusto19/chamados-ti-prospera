@@ -226,6 +226,7 @@ function renderPainel(){
     tb.appendChild(tr);
   });
   renderTiles();
+  if(typeof renderKanban === "function") renderKanban();
 
   var f = filtroAtivo();
   if($("fltResumo")) $("fltResumo").textContent = f
