@@ -214,6 +214,11 @@ details.fold>.fold-body{padding:0 14px 14px}
 .imp-lista .imp-cx{flex:none;width:auto;margin-top:3px}
 .imp-txt{flex:1;min-width:0;word-break:break-word}
 .imp-txt b{font-weight:650}
+.imp-grupo{
+  display:inline-block;margin-right:7px;padding:1px 8px;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent);
+  font-size:.68rem;font-weight:700;white-space:nowrap;
+}
 .imp-motivo{
   display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;
   background:var(--surface-2);color:var(--muted);font-size:.68rem;white-space:nowrap;
