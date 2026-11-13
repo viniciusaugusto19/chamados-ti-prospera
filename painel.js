@@ -64,7 +64,40 @@ function montarFiltros(){
     sel.value = (nomes.indexOf(atual) !== -1) ? atual : "";
   });
 }
-function passaFiltros(c){
+/* ---------------- parede de contadores ----------------
+   Cada contador é uma pergunta sobre os chamados ABERTOS, e clicar nele vira
+   filtro. São três blocos porque são três perguntas diferentes: onde o chamado
+   está (Fluxo), como está o prazo (SLA) e o que está mal cadastrado (Atenção).
+   Este último é o que deixa buraco no relatório semanal. */
+function emPausa(c){ return /pausa|aguardando terceiros/i.test(c.etapa || ""); }
+function emAtendimento(c){ return /em atendimento/i.test(c.etapa || ""); }
+var TILES = [
+  {g:"Fluxo", id:"afazer",   r:"A fazer",         t:function(c){ return !emPausa(c) && !emAtendimento(c); }},
+  {g:"Fluxo", id:"atend",    r:"Em atendimento",  t:emAtendimento},
+  {g:"Fluxo", id:"pausa",    r:"Pausados",        t:emPausa},
+  {g:"Fluxo", id:"meus",     r:"Meus",            t:function(c){ return euId !== null && String(c.responsavelId) === String(euId); }},
+  {g:"SLA", id:"crit",   r:"Estourados",     cor:"crit", t:function(c){ return situacao(c).cls === "crit"; }},
+  {g:"SLA", id:"warn",   r:"Perto do prazo", cor:"warn", t:function(c){ return situacao(c).cls === "warn"; }},
+  {g:"SLA", id:"ok",     r:"No prazo",       cor:"good", t:function(c){ return situacao(c).cls === "ok"; }},
+  {g:"SLA", id:"semsla", r:"Sem SLA",        t:function(c){ return situacao(c).txt === "sem SLA"; }},
+  {g:"Atenção", id:"semresp",  r:"Sem responsável",    cor:"warn", t:function(c){ return !labelUsuario(c.responsavelId); }},
+  {g:"Atenção", id:"sematend", r:"Sem 1º atendimento", cor:"warn", t:function(c){ return !c.primeiroAtend; }},
+  {g:"Atenção", id:"semempresa", r:"Sem empresa",      cor:"warn", t:function(c){ return !c.empresa; }},
+  {g:"Atenção", id:"semprio",  r:"Sem prioridade",     cor:"warn", t:function(c){ return !c.prioridade; }}
+];
+var tileAtivo = null;   /* só nesta visita: filtro esquecido ligado faz o painel mentir amanhã */
+function tilePorId(id){
+  for(var i = 0; i < TILES.length; i++) if(TILES[i].id === id) return TILES[i];
+  return null;
+}
+
+/* semTile: os contadores contam ignorando o próprio filtro de contador, senão
+   clicar em um zeraria todos os outros */
+function passaFiltros(c, semTile){
+  if(!semTile && tileAtivo){
+    var tl = tilePorId(tileAtivo);
+    if(tl && (fechado(c) || !tl.t(c))) return false;
+  }
   var ok = true;
   Object.keys(FILTROS).forEach(function(id){
     var sel = $(id);
@@ -82,6 +115,7 @@ function filtroAtivo(){
   Object.keys(FILTROS).forEach(function(id){ if($(id) && $(id).value) n++; });
   if($("fltBusca") && $("fltBusca").value.trim()) n++;
   if($("fltSituacao") && $("fltSituacao").value) n++;
+  if(tileAtivo) n++;
   return n;
 }
 function visiveis(){
@@ -99,6 +133,48 @@ if($("fltLimpar")) $("fltLimpar").addEventListener("click", function(){
   Object.keys(FILTROS).forEach(function(id){ if($(id)) $(id).value = ""; });
   if($("fltBusca")) $("fltBusca").value = "";
   if($("fltSituacao")) $("fltSituacao").value = "";
+  tileAtivo = null;
+  renderPainel();
+});
+
+function renderTiles(){
+  var alvo = $("kpis"); if(!alvo) return;
+  var base = chamados.filter(function(c){ return !fechado(c) && passaFiltros(c, true); });
+  var grupos = [], porNome = {};
+  TILES.forEach(function(t){
+    if(!porNome[t.g]){ porNome[t.g] = []; grupos.push(t.g); }
+    porNome[t.g].push(t);
+  });
+  var pend = fila.filter(function(it){ return !it.chamado; }).length;
+  alvo.innerHTML = grupos.map(function(g){
+    var extras = g !== "Fluxo" ? "" :
+      /* os dois que não são filtro: o total, que limpa o contador ativo, e a
+         fila de captura, que leva para a aba dela */
+      '<button type="button" class="tile' + (tileAtivo ? "" : " ativo") + (base.length ? "" : " zero") +
+        '" data-tile=""><span>Abertos</span><b>' + base.length + "</b></button>";
+    var fim = g !== "Fluxo" ? "" :
+      '<button type="button" class="tile' + (pend ? "" : " zero") +
+        '" data-ir="captura" title="Anotações que ainda não viraram chamado">' +
+        "<span>Fila de captura</span><b>" + pend + "</b></button>";
+    return '<div class="tile-grupo"><h4>' + esc(g) + '</h4><div class="tile-linha">' + extras +
+      porNome[g].map(function(t){
+        var n = base.filter(t.t).length;
+        return '<button type="button" class="tile ' + (t.cor || "") + (n ? "" : " zero") +
+          (tileAtivo === t.id ? " ativo" : "") + '" data-tile="' + t.id + '"' +
+          ' aria-pressed="' + (tileAtivo === t.id) + '"><span>' + esc(t.r) + "</span><b>" + n + "</b></button>";
+      }).join("") + fim + "</div></div>";
+  }).join("");
+}
+if($("kpis")) $("kpis").addEventListener("click", function(e){
+  var b = e.target.closest ? e.target.closest(".tile") : null;
+  if(!b) return;
+  if(b.dataset.ir){
+    document.querySelector('nav.tabs button[data-tab="' + b.dataset.ir + '"]').click();
+    return;
+  }
+  var id = b.dataset.tile || null;
+  /* clicar de novo no contador ativo desliga o filtro */
+  tileAtivo = (id && tileAtivo !== id) ? id : null;
   renderPainel();
 });
 
@@ -118,7 +194,6 @@ function renderPainel(){
   var lista = visiveis();
   var tb = $("tbChamados"); tb.innerHTML = "";
   $("painelVazio").hidden = lista.length > 0;
-  var n = {crit:0, warn:0, ok:0, pausa:0};
   lista.sort(function(a,b){
     var sa = situacao(a), sb = situacao(b);
     var pa = sa.limite ? sa.gasto/sa.limite : 0, pb = sb.limite ? sb.gasto/sb.limite : 0;
@@ -126,8 +201,6 @@ function renderPainel(){
   });
   lista.forEach(function(c){
     var s = situacao(c);
-    if(s.cls==="crit") n.crit++; else if(s.cls==="warn") n.warn++; else if(s.cls==="ok") n.ok++;
-    if(s.txt === "pausado") n.pausa++;
     var link = c.origem === "bitrix"
       ? '<a href="' + B.portal + '/crm/type/' + B.tipo + '/details/' + encodeURIComponent(c.id) + '/" target="_blank" rel="noopener" class="mini">abrir</a>'
       : '<span class="tag neutral">local</span>';
@@ -150,14 +223,7 @@ function renderPainel(){
       '<td style="text-align:right">' + link + "</td>";
     tb.appendChild(tr);
   });
-  $("kpis").innerHTML =
-    '<div class="kpi"><b>' + lista.length + "</b><span>em aberto</span></div>" +
-    '<div class="kpi crit"><b>' + n.crit + "</b><span>estourados</span></div>" +
-    '<div class="kpi warn"><b>' + n.warn + "</b><span>perto do prazo</span></div>" +
-    '<div class="kpi good"><b>' + n.ok + "</b><span>no prazo</span></div>" +
-    '<div class="kpi"><b>' + n.pausa + "</b><span>pausados</span></div>" +
-    '<div class="kpi"><b>' + fila.filter(function(it){ return !it.chamado; }).length +
-      "</b><span>na fila de captura</span></div>";
+  renderTiles();
 
   var f = filtroAtivo();
   if($("fltResumo")) $("fltResumo").textContent = f
