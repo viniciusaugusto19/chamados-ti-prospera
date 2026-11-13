@@ -112,8 +112,12 @@ function agruparSeguidas(msgs){
   return out;
 }
 
-/* ---------------- estado da revisão ---------------- */
-var impCandidatos = [];   /* [{quem, texto, quando, marcada, motivo}] */
+/* ---------------- estado da revisão ----------------
+   A lista acumula: cada arquivo lido entra nela sem apagar o anterior, porque
+   os pedidos da semana estão espalhados em vários grupos e ninguém quer
+   importar, mandar para a fila, voltar e repetir cinco vezes. */
+var impCandidatos = [];   /* [{quem, texto, quando, conversa, marcada, motivo}] */
+var impConversas  = [];   /* nomes das conversas já lidas nesta revisão */
 
 function nomesIgnorados(){
   return ($("impIgnorar") ? $("impIgnorar").value : "")
@@ -133,41 +137,74 @@ function jaNaFila(c){
   });
 }
 
-function importarTexto(txt){
+/* o nome do arquivo que o WhatsApp gera já diz de qual grupo veio */
+function nomeDaConversa(arquivo){
+  var n = String(arquivo || "").replace(/\.txt$/i, "")
+    .replace(/^conversa do whatsapp com\s*/i, "")
+    .replace(/^whatsapp chat with\s*/i, "")
+    .trim();
+  return (!n || /^_?chat$/i.test(n)) ? "conversa" : n;
+}
+
+function candidatosDe(txt, conversa){
   var msgs = lerConversa(txt);
-  if(!msgs.length){
-    $("impResultado").hidden = true;
-    toast("Não reconheci nenhuma mensagem nesse texto.");
-    if($("impAviso")) $("impAviso").textContent =
-      "Não achei linhas no formato do WhatsApp (data, hora, nome e dois-pontos). " +
-      "Use Exportar conversa → Sem mídia, e cole o arquivo .txt inteiro.";
-    return;
-  }
+  if(!msgs.length) return [];
   /* o ruído sai de lado antes de agrupar, mas continua aparecendo na lista de
      descartados: nada some calado, e um julgamento errado dá para resgatar */
   var ruidos = [], uteis = [];
   msgs.forEach(function(m){ (ehRuido(m.texto) ? ruidos : uteis).push(m); });
 
-  impCandidatos = agruparSeguidas(uteis).map(function(m){
+  return agruparSeguidas(uteis).map(function(m){
     var motivo = "";
     if(jaNaFila(m))             motivo = "já está na fila";
     else if(ehIgnorado(m.quem)) motivo = "remetente ignorado";
     else if(!pareceChamado(m))  motivo = "parece conversa, não pedido";
-    return {quem:m.quem, texto:m.texto, quando:m.quando, marcada: !motivo, motivo:motivo};
+    return {quem:m.quem, texto:m.texto, quando:m.quando, conversa:conversa,
+            marcada: !motivo, motivo:motivo};
   }).concat(ruidos.map(function(m){
-    return {quem:m.quem, texto:m.texto, quando:m.quando, marcada:false,
+    return {quem:m.quem, texto:m.texto, quando:m.quando, conversa:conversa, marcada:false,
             motivo: ehIgnorado(m.quem) ? "remetente ignorado" : "parece conversa, não pedido"};
-  })).sort(function(a, b){ return (a.quando || 0) - (b.quando || 0); });
-  pintarImport();
+  }));
+}
+
+/* junta na lista que já está na tela, sem repetir. Ler o mesmo arquivo duas
+   vezes (ou um grupo que aparece em dois exports) não pode dobrar a linha. */
+function adicionarCandidatos(novos, conversa){
+  if(conversa && impConversas.indexOf(conversa) === -1) impConversas.push(conversa);
+  novos.forEach(function(c){
+    var repetido = impCandidatos.some(function(x){
+      return x.texto === c.texto && x.quem === c.quem &&
+             String(x.quando) === String(c.quando);
+    });
+    if(!repetido) impCandidatos.push(c);
+  });
+  impCandidatos.sort(function(a, b){ return (a.quando || 0) - (b.quando || 0); });
+}
+
+function naoReconheci(){
+  $("impResultado").hidden = !impCandidatos.length;
+  toast("Não reconheci nenhuma mensagem nesse texto.");
+  if($("impAviso")) $("impAviso").textContent =
+    "Não achei linhas no formato do WhatsApp (data, hora, nome e dois-pontos). " +
+    "Use Exportar conversa → Sem mídia, e mande o arquivo .txt inteiro.";
+}
+function limparImport(){
+  impCandidatos = []; impConversas = [];
+  $("impResultado").hidden = true;
+  if($("impLidos")) $("impLidos").textContent = "";
 }
 
 function linhaCandidato(c, i, desc){
   var quando = c.quando ? c.quando.toLocaleString("pt-BR",
     {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"}) : "";
+  /* a conversa só aparece quando há mais de uma: com um arquivo só, ela seria
+     a mesma etiqueta repetida em toda linha */
+  var grupo = (impConversas.length > 1 && c.conversa)
+    ? '<span class="imp-grupo">' + esc(c.conversa) + "</span>" : "";
   return '<li' + (desc ? ' class="desc"' : "") + '>' +
     '<input type="checkbox" class="imp-cx" data-i="' + i + '"' + (c.marcada ? " checked" : "") +
       ' aria-label="incluir">' +
-    '<div class="imp-txt"><b>' + esc(c.quem) + "</b> " + esc(c.texto) +
+    '<div class="imp-txt">' + grupo + "<b>" + esc(c.quem) + "</b> " + esc(c.texto) +
       (c.motivo ? '<span class="imp-motivo">' + esc(c.motivo) + "</span>" : "") + "</div>" +
     '<div class="when">' + esc(quando) + "</div></li>";
 }
@@ -184,8 +221,9 @@ function pintarImport(){
   ver.textContent = ($("impDescartados").hidden ? "mostrar" : "esconder") +
     " o que eu descartei (" + fora.length + ")";
   var marcadas = impCandidatos.filter(function(c){ return c.marcada; }).length;
-  $("impTitulo").textContent = impCandidatos.length + " mensagens lidas, " +
-    entram.length + " parecem pedido, " + marcadas + " marcadas.";
+  $("impTitulo").textContent = impCandidatos.length + " mensagens" +
+    (impConversas.length > 1 ? " de " + impConversas.length + " conversas" : "") +
+    ", " + entram.length + " parecem pedido, " + marcadas + " marcadas.";
   $("impMandar").disabled = !marcadas;
   $("impMandar").textContent = "Mandar " + marcadas + " para a fila";
   box.hidden = false;
@@ -209,7 +247,11 @@ function mandarParaFila(){
   save(K.fila, fila);
   impCandidatos = impCandidatos.filter(function(c){ return !c.marcada; });
   impCandidatos.forEach(function(c){ if(!c.motivo) c.motivo = "já está na fila"; });
-  pintarImport();
+  /* sobrou só o que a página descartou? Então o trabalho acabou: cartão aberto
+     exibindo "bom dia" e "valeu" é ruído. Reler o arquivo traz tudo de volta,
+     já marcando como repetido o que foi para a fila. */
+  var sobrouPedido = impCandidatos.some(function(c){ return !c.motivo; });
+  if(sobrouPedido) pintarImport(); else limparImport();
   renderFila();
   toast(escolhidas.length + (escolhidas.length === 1 ? " anotação" : " anotações") + " na fila. Classifique e crie.");
 }
@@ -218,15 +260,57 @@ function mandarParaFila(){
 if($("impLer")) $("impLer").addEventListener("click", function(){
   var t = $("impTexto").value;
   if(!t.trim()){ $("impTexto").focus(); return; }
-  importarTexto(t);
+  var novos = candidatosDe(t, "texto colado");
+  if(!novos.length){ naoReconheci(); return; }
+  adicionarCandidatos(novos, "texto colado");
+  pintarLidos();
+  pintarImport();
 });
+
+function lerArquivo(f){
+  return new Promise(function(ok){
+    var r = new FileReader();
+    r.onload  = function(){ ok({nome: f.name, texto: String(r.result || "")}); };
+    r.onerror = function(){ ok({nome: f.name, texto: "", erro: true}); };
+    r.readAsText(f, "utf-8");
+  });
+}
 if($("impArquivo")) $("impArquivo").addEventListener("change", function(){
-  var f = this.files && this.files[0];
-  if(!f) return;
-  var r = new FileReader();
-  r.onload = function(){ $("impTexto").value = r.result; importarTexto(r.result); };
-  r.onerror = function(){ toast("Não consegui ler esse arquivo."); };
-  r.readAsText(f, "utf-8");
+  var arquivos = Array.prototype.slice.call(this.files || []);
+  /* zera o campo: sem isso, escolher o mesmo arquivo de novo não dispara nada */
+  this.value = "";
+  if(!arquivos.length) return;
+  if($("impLidos")) $("impLidos").textContent = "Lendo " + arquivos.length +
+    (arquivos.length === 1 ? " arquivo…" : " arquivos…");
+
+  Promise.all(arquivos.map(lerArquivo)).then(function(res){
+    var vazios = [];
+    res.forEach(function(r){
+      var conversa = nomeDaConversa(r.nome);
+      var novos = r.erro ? [] : candidatosDe(r.texto, conversa);
+      if(!novos.length){ vazios.push(r.nome); return; }
+      adicionarCandidatos(novos, conversa);
+    });
+    pintarLidos(vazios);
+    if(!impCandidatos.length){ naoReconheci(); return; }
+    pintarImport();
+    /* o texto só vai para a caixa quando é um arquivo só: com cinco, ela viraria
+       um paredão de conversa que ninguém vai ler */
+    if(arquivos.length === 1 && !res[0].erro) $("impTexto").value = res[0].texto;
+  });
+});
+function pintarLidos(vazios){
+  var el = $("impLidos"); if(!el) return;
+  var partes = [];
+  if(impConversas.length) partes.push("Lido: " + impConversas.join(" · "));
+  if(vazios && vazios.length)
+    partes.push("sem mensagem reconhecida em " + vazios.join(", "));
+  el.textContent = partes.join(" — ");
+}
+if($("impLimpar")) $("impLimpar").addEventListener("click", function(){
+  limparImport();
+  $("impTexto").value = "";
+  toast("Lista de importação limpa.");
 });
 if($("impLista")) $("impLista").addEventListener("change", function(e){
   if(!e.target.classList.contains("imp-cx")) return;
