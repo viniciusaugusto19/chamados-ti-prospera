@@ -47,7 +47,11 @@ function concluidoEm(c){ return fechado(c) ? (c.movido || null) : null; }
 
 /* a base do export NÃO é visiveis(): aquela esconde concluído, e concluído é
    metade do que o relatório precisa. Aqui entram os filtros, e só eles. */
-function baseExport(){ return chamados.filter(passaFiltros); }
+function baseExport(){
+  /* não passar passaFiltros direto ao filter: ele entregaria o índice como
+     segundo argumento, e o segundo argumento ali desliga o filtro de contador */
+  return chamados.filter(function(c){ return passaFiltros(c); });
+}
 
 function recortesDe(c, p){
   return {
@@ -193,6 +197,10 @@ function filtrosEmTexto(){
   });
   if($("fltBusca") && $("fltBusca").value.trim()) ps.push('busca = "' + $("fltBusca").value.trim() + '"');
   if($("fltSituacao") && $("fltSituacao").value) ps.push("situação = " + $("fltSituacao").value);
+  /* contador clicado no painel também é filtro, e some concluído do recorte:
+     tem de aparecer aqui, senão o arquivo sai filtrado sem dizer por quê */
+  if(typeof tileAtivo !== "undefined" && tileAtivo && tilePorId(tileAtivo))
+    ps.push("contador = " + tilePorId(tileAtivo).r);
   return ps.length ? ps.join(" · ") : "nenhum";
 }
 
