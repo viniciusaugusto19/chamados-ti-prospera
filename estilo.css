@@ -225,6 +225,16 @@ details.fold>.fold-body{padding:0 14px 14px}
 }
 .imp-lista.descartados li{opacity:.62}
 .imp-lista.descartados li:hover{opacity:1}
+
+/* cronômetro do chamado */
+.crono-linha{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#cronoTempo{
+  font-family:var(--mono);font-size:1.25rem;font-weight:700;
+  font-variant-numeric:tabular-nums;flex:1;min-width:104px;
+}
+#cronoTempo.rodando{color:var(--accent)}
+.crono-linha button{flex:none}
+
 /* classificar várias de uma vez */
 .aplicar-linha{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 
