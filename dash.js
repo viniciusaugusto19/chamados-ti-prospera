@@ -72,6 +72,22 @@ function diasCorridos(iso){
   return (Date.now() - d.getTime()) / 86400000;
 }
 
+/* horas úteis da abertura até alguém responder. null = ninguém respondeu
+   ainda (ou o campo Primeiro atendimento não foi preenchido no portal). */
+function horasAteAtender(c){
+  if(!c.primeiroAtend) return null;
+  var d = new Date(c.primeiroAtend);
+  if(isNaN(d.getTime())) return null;
+  return horasUteis(new Date(c.aberto), d);
+}
+var FAIXAS_ATEND = [
+  {r:"até 1h útil",            t:function(h){ return h !== null && h <= 1; }},
+  {r:"1 a 4h úteis",           t:function(h){ return h !== null && h > 1 && h <= 4; }},
+  {r:"4h a 1 dia útil",        t:function(h){ return h !== null && h > 4 && h <= 8; }},
+  {r:"mais de 1 dia útil",     t:function(h){ return h !== null && h > 8; }},
+  {r:"ainda sem atendimento",  t:function(h){ return h === null; }}
+];
+
 function renderDash(){
   if(!$("sub-dash")) return;
   var lista = visiveis();
@@ -131,6 +147,20 @@ function renderDash(){
   pintarGrupos("dashCategorias", agrupar(lista, function(c){ return c.categoria; }),
     "Nenhuma categoria com chamado.");
 
+  /* 5. primeiro atendimento. Régua diferente da resolução: quem responde em
+        10 min e resolve em 2 dias presta serviço melhor do que quem some por
+        um dia e resolve em 4h. "Ainda sem atendimento" é a fila de ninguém. */
+  var alvoA = $("dashAtend");
+  if(alvoA){
+    var porAtend = FAIXAS_ATEND.map(function(f){
+      return {rotulo:f.r, itens: lista.filter(function(c){ return f.t(horasAteAtender(c)); })};
+    }).filter(function(g){ return g.itens.length; });
+    var maiorA = porAtend.reduce(function(m,g){ return Math.max(m, g.itens.length); }, 0);
+    alvoA.innerHTML = porAtend.length
+      ? porAtend.map(function(g){ return linhaBarra(g, maiorA); }).join("")
+      : '<div class="vazio-mini">Nenhum chamado nesse filtro.</div>';
+  }
+
   /* o cartão de export mostra contagem e datas do recorte; ele tem que
      acompanhar os mesmos filtros, senão anuncia um número e exporta outro */
   if(typeof pintarExport === "function") pintarExport();
@@ -165,18 +195,68 @@ function detectarNovos(lista){
   save(K.ultimoId, Math.max(maior, ultimo));
   if(!novos.length) return;
   novos.forEach(function(c){
-    novosPendentes.push({id:c.id, titulo:c.titulo, meu:ehMeu(c),
+    novosPendentes.push({id:c.id, titulo:c.titulo, meu:ehMeu(c), tipo:"novo",
                          prioridade:rotuloCurto(c.prioridade), quando:new Date().toISOString()});
   });
-  /* os seus primeiro, e dentro de cada grupo o mais recente no topo */
-  novosPendentes.sort(function(a,b){
-    if(a.meu !== b.meu) return a.meu ? -1 : 1;
-    return idNum(b.id) - idNum(a.id);
-  });
+  ordenarPendentes();
   save(K.novos, novosPendentes);
   pintarFaixaNovos();
   notificarSistema(novos);
 }
+/* ---------------- alerta de prazo ----------------
+   Chamado novo é um evento; prazo estourando é um estado, e estado não dispara
+   sozinho. Guardamos em que nível cada chamado já foi anunciado, para a
+   releitura de 60s não repetir o mesmo aviso — e para o estouro ainda avisar
+   depois de o "perto do prazo" já ter avisado. */
+var NIVEL = {warn:1, crit:2};
+var avisados = load(K.prazos, null);
+function detectarPrazos(lista){
+  var primeira = (avisados === null || avisados === undefined);
+  if(primeira) avisados = {};
+  var achados = [];
+  lista.forEach(function(c){
+    if(fechado(c)) return;
+    var s = situacao(c);
+    if(s.cls !== "warn" && s.cls !== "crit") return;
+    if((NIVEL[s.cls] || 0) <= (NIVEL[avisados[c.id]] || 0)) return;
+    avisados[c.id] = s.cls;
+    /* na primeiríssima carga só anota o estado: senão a página abriria
+       anunciando os três chamados que já estavam estourados ontem */
+    if(!primeira) achados.push({
+      id:c.id, titulo:c.titulo, meu:ehMeu(c), prioridade:rotuloCurto(c.prioridade),
+      quando:new Date().toISOString(), tipo:"prazo", nivel:s.cls,
+      texto: s.cls === "crit" ? "estourou o prazo" : "perto do prazo"
+    });
+  });
+  /* quem saiu do risco perde a marca — foi resolvido, pausado ou teve a
+     prioridade corrigida. Sem isso ele nunca mais avisaria se voltasse. */
+  Object.keys(avisados).forEach(function(id){
+    var ainda = lista.some(function(c){
+      if(String(c.id) !== id || fechado(c)) return false;
+      var cl = situacao(c).cls;
+      return cl === "warn" || cl === "crit";
+    });
+    if(!ainda) delete avisados[id];
+  });
+  save(K.prazos, avisados);
+  if(!achados.length) return;
+  achados.forEach(function(a){ novosPendentes.push(a); });
+  ordenarPendentes();
+  save(K.novos, novosPendentes);
+  pintarFaixaNovos();
+  notificarPrazo(achados);
+}
+function ordenarPendentes(){
+  /* estouro primeiro, depois o que é seu, depois o mais recente */
+  novosPendentes.sort(function(a,b){
+    var pa = a.nivel === "crit" ? 2 : (a.tipo === "prazo" ? 1 : 0);
+    var pb = b.nivel === "crit" ? 2 : (b.tipo === "prazo" ? 1 : 0);
+    if(pa !== pb) return pb - pa;
+    if(a.meu !== b.meu) return a.meu ? -1 : 1;
+    return idNum(b.id) - idNum(a.id);
+  });
+}
+
 function pintarFaixaNovos(){
   var f = $("faixaNovos"), pill = $("pillNovos");
   if(pill){
@@ -185,17 +265,31 @@ function pintarFaixaNovos(){
   }
   if(!f) return;
   if(!novosPendentes.length){ f.hidden = true; return; }
-  var meus = novosPendentes.filter(function(n){ return n.meu; }).length;
-  var tit = novosPendentes.length === 1 ? "1 chamado novo no Bitrix"
-                                        : novosPendentes.length + " chamados novos no Bitrix";
-  if(meus) tit += " — " + (meus === 1 ? "1 é seu" : meus + " são seus");
-  $("faixaTitulo").textContent = tit;
+  var prazos = novosPendentes.filter(function(n){ return n.tipo === "prazo"; });
+  var novos  = novosPendentes.filter(function(n){ return n.tipo !== "prazo"; });
+  var partes = [];
+  if(novos.length){
+    var meus = novos.filter(function(n){ return n.meu; }).length;
+    partes.push(novos.length === 1 ? "1 chamado novo no Bitrix"
+                                   : novos.length + " chamados novos no Bitrix" +
+      (meus ? " (" + meus + " " + (meus === 1 ? "seu" : "seus") + ")" : ""));
+  }
+  if(prazos.length){
+    var estourou = prazos.filter(function(n){ return n.nivel === "crit"; }).length;
+    partes.push(estourou
+      ? estourou + (estourou === 1 ? " prazo estourou" : " prazos estouraram") +
+        (prazos.length > estourou ? " e " + (prazos.length - estourou) + " está perto" : "")
+      : prazos.length + (prazos.length === 1 ? " chamado perto do prazo" : " chamados perto do prazo"));
+  }
+  $("faixaTitulo").textContent = partes.join(" · ");
   $("faixaLista").innerHTML = novosPendentes.slice(0, 8).map(function(n){
+    var selo = n.tipo === "prazo"
+      ? '<span class="tag ' + n.nivel + '">' + esc(n.texto) + "</span>"
+      : (n.meu ? '<span class="selo-meu">seu</span>' : "");
     return '<li' + (n.meu ? ' class="meu"' : "") + '>' +
       '<a href="' + B.portal + "/crm/type/" + B.tipo + "/details/" + encodeURIComponent(n.id) +
       '/" target="_blank" rel="noopener">#' + esc(n.id) + " " + esc(n.titulo || "(sem nome)") + "</a>" +
-      (n.meu ? '<span class="selo-meu">seu</span>' : "") +
-      '<span class="nv-p">' + esc(n.prioridade) + "</span></li>";
+      selo + '<span class="nv-p">' + esc(n.prioridade) + "</span></li>";
   }).join("") + (novosPendentes.length > 8
       ? '<li class="nv-mais">e mais ' + (novosPendentes.length - 8) + "</li>" : "");
   f.hidden = false;
@@ -222,6 +316,25 @@ function notificarSistema(novos){
       nt.close();
     };
   }catch(e){ /* navegador recusou a notificação; a faixa na página continua */ }
+}
+function notificarPrazo(achados){
+  if(!("Notification" in window) || Notification.permission !== "granted") return;
+  try{
+    var estourou = achados.filter(function(a){ return a.nivel === "crit"; }).length;
+    var tit = estourou ? (estourou === 1 ? "Prazo estourado" : estourou + " prazos estourados")
+                       : (achados.length === 1 ? "Chamado perto do prazo"
+                                               : achados.length + " chamados perto do prazo");
+    var corpo = achados.slice(0, 3).map(function(a){
+      return (a.meu ? "(seu) " : "") + "#" + a.id + " " + (a.titulo || "sem nome") + " — " + a.texto;
+    }).join("\n");
+    if(achados.length > 3) corpo += "\n… e mais " + (achados.length - 3);
+    var nt = new Notification(tit, {body: corpo, tag: "ctip-prazos", renotify: true});
+    nt.onclick = function(){
+      window.focus();
+      document.querySelector('nav.tabs button[data-tab="painel"]').click();
+      nt.close();
+    };
+  }catch(e){ /* idem */ }
 }
 function pintarEstadoAlerta(){
   var b = $("btnNotificar"), s = $("estadoAlerta");
