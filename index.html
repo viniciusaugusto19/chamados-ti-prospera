@@ -56,6 +56,35 @@
     <div class="hint">Enter em qualquer um dos campos também salva.</div>
   </div>
 
+  <div class="card" id="cardImportar">
+    <h3>Importar conversa do WhatsApp</h3>
+    <div class="imp-topo">
+      <input type="file" id="impArquivo" accept=".txt,text/plain">
+      <input type="text" id="impIgnorar" placeholder="Ignorar mensagens de (separe por vírgula)" autocomplete="off">
+      <button class="ghost" id="impLer" type="button">Ler conversa</button>
+    </div>
+    <textarea id="impTexto" rows="4"
+      placeholder="…ou cole aqui o texto da conversa exportada (Exportar conversa → Sem mídia)."></textarea>
+    <div class="hint" id="impAviso">
+      A conversa é lida aqui dentro do navegador e <b>não sai da sua máquina</b> — só vai para o
+      Bitrix o chamado que você mandar criar. A separação é por palavra-chave, então ela acerta o
+      pedido escrito de forma direta e erra o escrito torto: confira antes de mandar para a fila.
+    </div>
+
+    <div id="impResultado" hidden>
+      <div class="imp-barra">
+        <b id="impTitulo"></b>
+        <span style="flex:1"></span>
+        <button class="mini" id="impTodos" type="button">Marcar todos</button>
+        <button class="mini" id="impNenhum" type="button">Desmarcar</button>
+        <button class="primary" id="impMandar" type="button">Mandar para a fila</button>
+      </div>
+      <ul class="imp-lista" id="impLista"></ul>
+      <button class="mini" id="impVerDescartados" type="button" hidden></button>
+      <ul class="imp-lista descartados" id="impDescartados" hidden></ul>
+    </div>
+  </div>
+
   <div class="card">
     <h3>Virar em chamados</h3>
     <div class="lote-topo">
@@ -67,6 +96,13 @@
         <input type="checkbox" id="loteTodas" style="width:auto"> marcar todas
       </label>
       <button class="primary" id="btnLote" type="button">Criar chamados</button>
+    </div>
+    <div class="lote-topo aplicar-linha">
+      <span class="hint" style="margin:0">Classificar as marcadas de uma vez:</span>
+      <select id="aplCategoria"><option value="">Categoria</option></select>
+      <select id="aplSubcategoria"><option value="">Subcategoria</option></select>
+      <select id="aplPrioridade"><option value="">Prioridade</option></select>
+      <button class="ghost" id="btnAplicar" type="button">Aplicar às marcadas</button>
     </div>
     <div class="hint" id="loteAviso"></div>
 
@@ -516,6 +552,7 @@
 <script src="painel.js"></script>
 <script src="dash.js"></script>
 <script src="relatorio.js"></script>
+<script src="importar.js"></script>
 <script src="doc.js"></script>
 <script src="app.js"></script>
 <script src="boot.js"></script>
