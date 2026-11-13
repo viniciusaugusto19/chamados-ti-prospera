@@ -228,7 +228,8 @@ function carregarChamados(){
       select: ["id","title","stageId","createdTime","createdBy","updatedTime",
                "updatedBy","movedTime","movedBy","assignedById",
                campos.categoria, campos.subcategoria, campos.prioridade, campos.detalhes,
-               campos.empresa, campos.solicitante, campos.externo]
+               campos.empresa, campos.solicitante, campos.externo,
+               campos.primeiroAtend]
     }).then(function(j){
       var itens = (j.result && j.result.items) ? j.result.items : [];
       todos = todos.concat(itens);
@@ -256,6 +257,7 @@ function carregarChamados(){
           etapa: et.nome || it.stageId,
           semantica: et.semantica,
           aberto: it.createdTime,
+          primeiroAtend: it[campos.primeiroAtend],
           criadoPor: it.createdBy,
           responsavelId: it.assignedById,
           atualizado: it.updatedTime,
@@ -271,6 +273,7 @@ function carregarChamados(){
       dashUltima = new Date();        /* o dash mostra de quando são os dados */
       /* compara com o que já tínhamos antes de a tela se redesenhar */
       if(typeof detectarNovos === "function") detectarNovos(deBitrix);
+      if(typeof detectarPrazos === "function") detectarPrazos(deBitrix);
       st.textContent = deBitrix.length + " chamados lidos do Bitrix em " +
         new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) + ".";
       renderPainel(); renderSelectChamados();
