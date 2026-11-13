@@ -59,16 +59,18 @@
   <div class="card" id="cardImportar">
     <h3>Importar conversa do WhatsApp</h3>
     <div class="imp-topo">
-      <input type="file" id="impArquivo" accept=".txt,text/plain">
+      <input type="file" id="impArquivo" accept=".txt,text/plain" multiple>
       <input type="text" id="impIgnorar" placeholder="Ignorar mensagens de (separe por vírgula)" autocomplete="off">
       <button class="ghost" id="impLer" type="button">Ler conversa</button>
     </div>
+    <div class="hint" id="impLidos"></div>
     <textarea id="impTexto" rows="4"
-      placeholder="…ou cole aqui o texto da conversa exportada (Exportar conversa → Sem mídia)."></textarea>
+      placeholder="…ou cole aqui o texto de uma conversa (Exportar conversa → Sem mídia)."></textarea>
     <div class="hint" id="impAviso">
-      A conversa é lida aqui dentro do navegador e <b>não sai da sua máquina</b> — só vai para o
-      Bitrix o chamado que você mandar criar. A separação é por palavra-chave, então ela acerta o
-      pedido escrito de forma direta e erra o escrito torto: confira antes de mandar para a fila.
+      Dá para escolher <b>vários arquivos de uma vez</b> — cada conversa entra na mesma lista, sem
+      apagar a anterior. Tudo é lido aqui dentro do navegador e <b>não sai da sua máquina</b>: só vai
+      para o Bitrix o chamado que você mandar criar. A separação é por palavra-chave, então ela
+      acerta o pedido escrito de forma direta e erra o escrito torto — confira antes de mandar.
     </div>
 
     <div id="impResultado" hidden>
@@ -77,6 +79,7 @@
         <span style="flex:1"></span>
         <button class="mini" id="impTodos" type="button">Marcar todos</button>
         <button class="mini" id="impNenhum" type="button">Desmarcar</button>
+        <button class="mini danger" id="impLimpar" type="button">Limpar lista</button>
         <button class="primary" id="impMandar" type="button">Mandar para a fila</button>
       </div>
       <ul class="imp-lista" id="impLista"></ul>
