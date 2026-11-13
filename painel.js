@@ -178,10 +178,12 @@ if($("kpis")) $("kpis").addEventListener("click", function(e){
   renderPainel();
 });
 
-/* ---------------- abas internas do painel ---------------- */
+/* ---------------- abas internas ----------------
+   Vale para qualquer grupo .subtabs da página (o do painel e o da ficha do
+   chamado): cada clique só mexe nos botões do próprio grupo. */
 Array.prototype.forEach.call(document.querySelectorAll(".subtabs button"), function(b){
   b.addEventListener("click", function(){
-    Array.prototype.forEach.call(document.querySelectorAll(".subtabs button"), function(o){
+    Array.prototype.forEach.call(b.parentNode.querySelectorAll("button"), function(o){
       o.setAttribute("aria-selected", o === b ? "true" : "false");
       var s = $("sub-" + o.dataset.sub); if(s) s.hidden = (o !== b);
     });
