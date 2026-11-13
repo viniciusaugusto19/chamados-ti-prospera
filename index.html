@@ -214,6 +214,13 @@
         <h3>Por categoria</h3>
         <ul class="barras" id="dashCategorias"></ul>
       </div>
+
+      <div class="bloco">
+        <h3>Primeiro atendimento</h3>
+        <ul class="barras" id="dashAtend"></ul>
+        <div class="hint">Da abertura até alguém responder, em horas úteis. É régua diferente
+          da resolução — e "ainda sem atendimento" é a fila que ninguém tocou.</div>
+      </div>
     </div>
     <div class="hint" style="margin-top:12px">
       A cor dentro de cada barra é a situação de SLA: vermelho estourado, âmbar perto do prazo,
@@ -457,6 +464,19 @@
           <div class="trilho" id="trilho"></div>
         </div>
 
+        <div class="bloco" id="cardCrono" hidden>
+          <h3>Tempo trabalhado</h3>
+          <div class="crono-linha">
+            <b id="cronoTempo">0m 00s</b>
+            <button class="ghost" id="cronoBtn" type="button">Iniciar</button>
+            <button class="mini danger" id="cronoZerar" type="button" hidden>zerar</button>
+          </div>
+          <div class="hint" id="cronoAviso"></div>
+          <div class="hint">Conta só o tempo em que você esteve neste chamado, ao contrário do
+            SLA, que corre desde a abertura mesmo com o chamado parado. Fica guardado neste
+            navegador e sai como coluna no CSV do relatório.</div>
+        </div>
+
         <div class="bloco">
           <h3>Pausa</h3>
           <div class="field">
@@ -557,6 +577,7 @@
 <script src="relatorio.js"></script>
 <script src="importar.js"></script>
 <script src="doc.js"></script>
+<script src="cronometro.js"></script>
 <script src="app.js"></script>
 <script src="boot.js"></script>
 </body>
