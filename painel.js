@@ -9,13 +9,24 @@
 (function(){ var j = load(K.jornada, null);
   if(j){ $("jorIni").value=j.ini; $("jorFim").value=j.fim; $("jorDias").value=j.dias; } })();
 
+/* um chamado está fechado quando o funil diz que está, não pelo nome da etapa */
+function fechado(c){
+  return c.semantica === "S" || c.semantica === "F" || c.etapa === "Concluir";
+}
 function situacao(c){
   var s = slaDeLabel(c.prioridade) || slaDe(c.prioridade);
-  var gasto = horasUteis(new Date(c.aberto), new Date());
+  /* para chamado fechado o relógio para na conclusão. Contar até agora inflava
+     as horas de quem já entregou — no painel não aparecia porque concluído
+     pintava de verde de qualquer jeito, mas num relatório seria número errado.
+     movedTime é quando ele entrou na etapa atual; para um fechado, é o fecho. */
+  var fim = (fechado(c) && c.movido) ? new Date(c.movido) : new Date();
+  var gasto = horasUteis(new Date(c.aberto), fim);
   if(!s) return {cls:"neutral", txt:"sem SLA", gasto:gasto, limite:0};
   var pct = s.h ? gasto / s.h : 0;
   if(c.semantica === "S" || c.etapa === "Concluir")
-    return {cls:"ok", txt:"concluído", gasto:gasto, limite:s.h};
+    return pct >= 1
+      ? {cls:"crit", txt:"concluído fora do prazo", gasto:gasto, limite:s.h}
+      : {cls:"ok",   txt:"concluído", gasto:gasto, limite:s.h};
   if(c.semantica === "F")
     return {cls:"neutral", txt:"encerrado", gasto:gasto, limite:s.h};
   if(/pausa|aguardando terceiros/i.test(c.etapa || ""))
