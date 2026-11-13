@@ -239,17 +239,34 @@ details.fold>.fold-body{padding:0 14px 14px}
 .aplicar-linha{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 
 /* ---------- painel ---------- */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:12px;margin-bottom:16px}
-.kpi{
-  background:var(--surface);border:1px solid var(--line);border-radius:12px;
-  padding:13px 15px;position:relative;overflow:hidden;
+/* parede de contadores: três blocos, cada contador é um filtro clicável.
+   Contador zerado apaga de propósito — o olho vai direto para o que tem número. */
+.kpis{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;align-items:stretch}
+.tile-grupo{
+  flex:1 1 300px;background:var(--surface);border:1px solid var(--line);
+  border-radius:13px;padding:12px 13px 13px;
 }
-.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line)}
-.kpi.crit::before{background:var(--crit)} .kpi.warn::before{background:var(--warn)}
-.kpi.good::before{background:var(--good)}
-.kpi b{display:block;font-size:1.7rem;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.kpi span{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.kpi.crit b{color:var(--crit)} .kpi.warn b{color:var(--warn)} .kpi.good b{color:var(--good)}
+.tile-grupo h4{
+  margin:0 0 9px;font-size:.68rem;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--titulo);font-weight:700;
+}
+.tile-linha{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px}
+.tile{
+  display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+  padding:9px 11px;cursor:pointer;color:var(--fg);position:relative;overflow:hidden;
+}
+.tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line)}
+.tile span{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;line-height:1.25}
+.tile b{font-size:1.55rem;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:auto}
+.tile:hover{border-color:var(--accent)}
+.tile.crit::before{background:var(--crit)} .tile.crit b{color:var(--crit)}
+.tile.warn::before{background:var(--warn)} .tile.warn b{color:var(--warn)}
+.tile.good::before{background:var(--good)} .tile.good b{color:var(--good)}
+.tile.zero{opacity:.45}
+.tile.zero b{color:var(--muted)}
+.tile.zero::before{background:var(--line)}
+.tile.ativo{border-color:var(--laranja);background:var(--accent-soft);opacity:1}
 
 /* faixa de chamado novo: fora das abas, porque a vigia roda em todas elas.
    Fica até ser dispensada de propósito — alerta que some sozinho é alerta
