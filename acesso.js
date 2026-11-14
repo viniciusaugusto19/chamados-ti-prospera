@@ -117,7 +117,7 @@ function acSair(){
   d.innerHTML = '<form class="card" id="acForm" autocomplete="on">' +
     '<h3 id="acTitulo"></h3><div class="hint" id="acSub" style="margin:0"></div>' +
     '<div class="field" id="acCampoEmail"><label for="acEmail">E-mail</label>' +
-      '<input type="email" id="acEmail" autocomplete="username"></div>' +
+      '<input type="text" inputmode="email" autocapitalize="off" spellcheck="false" id="acEmail" autocomplete="username"></div>' +
     '<div class="field" id="acCampoSenha"><label for="acSenha">Senha</label>' +
       '<input type="password" id="acSenha" autocomplete="current-password"></div>' +
     '<div class="field" id="acCampoNova"><label for="acNova">Nova senha</label>' +
@@ -322,7 +322,7 @@ function acPintarAbaUsuarios(){
     '<p class="lead">Quem pode entrar no Chamados TI. Não há cadastro aberto: só entra quem for criado aqui.</p>' +
     '<div class="card"><h3>Novo usuário</h3><div class="grid g3">' +
       '<div class="field"><label for="acNovoNome">Nome</label><input type="text" id="acNovoNome" maxlength="80" autocomplete="off"></div>' +
-      '<div class="field"><label for="acNovoEmail">E-mail</label><input type="email" id="acNovoEmail" autocomplete="off"></div>' +
+      '<div class="field"><label for="acNovoEmail">E-mail</label><input type="text" inputmode="email" autocapitalize="off" spellcheck="false" id="acNovoEmail" autocomplete="off"></div>' +
       '<div class="field"><label for="acNovoPapel">Papel</label><select id="acNovoPapel">' +
         '<option value="atendente">Atendente</option><option value="admin">Administrador</option></select></div>' +
     '</div><div class="row-end"><span class="hint" id="acNovoAviso" style="flex:1;margin:0"></span>' +
