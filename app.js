@@ -313,7 +313,7 @@ $("fPrioridade").addEventListener("change", function(){
 });
 $("btnLimpar").addEventListener("click", function(){
   ["fTitulo","fEmpresa","fCanal","fCategoria","fSubcategoria","fPrioridade","fDetalhes",
-   "fSolicitante","fEquipamento","fResponsavel","fTipo"]
+   "fSolicitante","fEquipamento","fResponsavel","fTipo","fPassos","fModelo"]
     .forEach(function(id){ if($(id)) $(id).value = ""; });
   $("slaHint").textContent = "Escolha a prioridade para ver o prazo.";
   $("abrirAviso").textContent = "";
@@ -333,6 +333,11 @@ function faltandoNoFormulario(){
   return OBRIGATORIOS.filter(function(r){ return !String($(r[0]).value || "").trim(); })
                      .map(function(r){ return r[1]; });
 }
+/* um passo por linha; linha em branco não vira passo */
+function passosDoFormulario(){
+  if(!$("fPassos")) return [];
+  return $("fPassos").value.split("\n").map(function(l){ return l.trim(); }).filter(Boolean);
+}
 function camposDoNovoChamado(){
   var c = B.campo, f = {};
   f.title = $("fTitulo").value.trim();   /* é o nome que aparece na lista */
@@ -346,6 +351,8 @@ function camposDoNovoChamado(){
   if($("fEmpresa").value) f[c.empresa] = $("fEmpresa").value;
   var eq = String($("fEquipamento").value || "").trim();
   if(eq) f[c.equipamento] = [eq];        /* campo múltiplo: vai array */
+  var passosNovos = passosDoFormulario();
+  if(passosNovos.length) f[c.passos] = passosNovos;   /* idem */
   return f;
 }
 function salvarLocalmente(aviso){
@@ -359,7 +366,8 @@ function salvarLocalmente(aviso){
     etapa: $("fEtapa").value || ETAPAS[0],
     solicitante: $("fSolicitante").value, equipamento: $("fEquipamento").value,
     detalhes: $("fDetalhes").value, aberto: new Date().toISOString(),
-    origem: "local", doc: null
+    origem: "local",
+    doc: passosDoFormulario().length ? {testes: [], passos: passosDoFormulario(), resolucao: ""} : null
   };
   chamados.unshift(c); save(K.chamados, chamados);
   marcarCapturaComoVirada("local");
@@ -398,6 +406,9 @@ $("btnSalvarChamado").addEventListener("click", function(){
       if(typeof marcarVisto === "function") marcarVisto(novo.id);
       $("fTitulo").value = ""; $("fDetalhes").value = "";
       $("fSolicitante").value = ""; $("fEquipamento").value = "";
+      /* os passos do modelo já foram com este chamado: não podem ir de carona no próximo */
+      if($("fPassos")) $("fPassos").value = "";
+      if($("fModelo")) $("fModelo").value = "";
       carregarChamados();
     })
     .catch(function(e){

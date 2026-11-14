@@ -34,11 +34,32 @@ function pcPalavras(t){
     });
   return out;
 }
+function pcChave(t){
+  return String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/\s+/g, " ").trim();
+}
+/* quantos chamados carregados têm o mesmo equipamento e o mesmo solicitante */
+function pcResumo(id){
+  var atual = null;
+  chamados.forEach(function(c){ if(String(c.id) === String(id)) atual = c; });
+  if(!atual) return "";
+  var ke = pcChave(atual.equipamento), ks = pcChave(atual.solicitante), ne = 0, ns = 0;
+  chamados.forEach(function(c){
+    if(ke.length >= 3 && pcChave(c.equipamento) === ke) ne++;
+    if(ks.length >= 3 && pcChave(c.solicitante) === ks) ns++;
+  });
+  var p = [];
+  if(ne) p.push("Equipamento “" + atual.equipamento + "”: " + ne + (ne === 1 ? " chamado" : " chamados") + " entre os carregados");
+  if(ns) p.push("Solicitante " + atual.solicitante + ": " + ns + (ns === 1 ? " chamado" : " chamados"));
+  if(!ke) p.push("Este chamado está sem equipamento preenchido, então não dá para ver o histórico do aparelho");
+  return p.join(" · ") + ".";
+}
 function pcParecidos(id){
   var atual = null;
   chamados.forEach(function(c){ if(String(c.id) === String(id)) atual = c; });
   if(!atual) return [];
   var minhas = pcPalavras(atual.titulo);
+  var meuEq = pcChave(atual.equipamento);
   var achados = [];
   chamados.forEach(function(c){
     if(String(c.id) === String(id)) return;
@@ -46,10 +67,12 @@ function pcParecidos(id){
     var comuns = minhas.filter(function(p){ return dele.indexOf(p) !== -1; });
     var sub = !!atual.subcategoria && atual.subcategoria === c.subcategoria;
     var cat = !!atual.categoria && atual.categoria === c.categoria;
+    /* mesmo equipamento pesa mais que tudo: é o defeito voltando */
+    var eq = meuEq.length >= 3 && meuEq === pcChave(c.equipamento);
     /* só categoria igual não basta: metade dos chamados cai na mesma */
-    if(!comuns.length && !sub) return;
-    achados.push({c: c, comuns: comuns, sub: sub, cat: cat,
-                  pontos: comuns.length * 2 + (sub ? 2 : 0) + (cat ? 1 : 0)});
+    if(!comuns.length && !sub && !eq) return;
+    achados.push({c: c, comuns: comuns, sub: sub, cat: cat, eq: eq,
+                  pontos: comuns.length * 2 + (sub ? 2 : 0) + (cat ? 1 : 0) + (eq ? 5 : 0)});
   });
   achados.sort(function(a, b){
     if(b.pontos !== a.pontos) return b.pontos - a.pontos;
@@ -66,6 +89,12 @@ function pcResolucao(c){
     return Promise.resolve();
   }
   if(pcCache[c.id]) return Promise.resolve();
+  /* a lista do painel já traz a resolução; só busca um a um o que ficou
+     guardado de antes de ela trazer */
+  if(typeof c.resolucao === "string"){
+    pcCache[c.id] = {texto: c.resolucao.trim()};
+    return Promise.resolve();
+  }
   return bitrixCall("crm.item.get", {entityTypeId: B.tipo, id: c.id}).then(function(j){
     var it = (j.result && j.result.item) ? j.result.item : {};
     pcCache[c.id] = {texto: String(it[B.campo.resolucao] || "").trim()};
@@ -99,6 +128,7 @@ function pintarParecidos(){
   ul.innerHTML = itens.map(function(a){
     var c = a.c, r = pcCache[c.id];
     var porque = [];
+    if(a.eq) porque.push("mesmo equipamento");
     if(a.comuns.length) porque.push("em comum no nome: " + a.comuns.join(", "));
     if(a.sub) porque.push("mesma subcategoria");
     else if(a.cat) porque.push("mesma categoria");
@@ -127,6 +157,7 @@ function pintarParecidos(){
     $("cntParecidos").className = itens.length ? "pill" : "";
   }
   $("pcVazio").hidden = itens.length > 0;
+  if($("pcResumo")) $("pcResumo").textContent = (id && pc.id === id) ? pcResumo(id) : "";
 }
 
 if($("pcLista")){
