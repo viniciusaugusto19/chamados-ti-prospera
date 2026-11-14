@@ -91,6 +91,28 @@ function tilePorId(id){
   return null;
 }
 
+/* ---------------- busca geral ----------------
+   Uma caixa só, que procura em tudo o que a lista carrega de cada chamado.
+   Sem acento e sem maiúscula; com várias palavras, o chamado precisa ter todas. */
+function semAcento(t){
+  return String(t === null || t === undefined ? "" : t)
+    .normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+function textoDeBusca(c){
+  return semAcento([c.id, c.titulo, c.solicitante, c.equipamento, c.empresa, c.categoria,
+    c.subcategoria, c.etapa, labelUsuario(c.responsavelId), c.detalhes, c.resolucao]
+    .filter(Boolean).join(" \n "));
+}
+function casaComBusca(c, busca){
+  var termos = semAcento(busca).split(/\s+/).filter(Boolean);
+  if(!termos.length) return true;
+  var texto = textoDeBusca(c);
+  return termos.every(function(t){ return texto.indexOf(t) !== -1; });
+}
+/* quem precisa se redesenhar junto com o painel entra aqui, em vez de o painel
+   conhecer cada módulo pelo nome */
+var aposPainel = [];
+
 /* semTile: os contadores contam ignorando o próprio filtro de contador, senão
    clicar em um zeraria todos os outros */
 function passaFiltros(c, semTile){
@@ -104,8 +126,8 @@ function passaFiltros(c, semTile){
     if(sel && sel.value && FILTROS[id](c) !== sel.value) ok = false;
   });
   if(!ok) return false;
-  var busca = $("fltBusca") ? $("fltBusca").value.trim().toLowerCase() : "";
-  if(busca && String(c.titulo || "").toLowerCase().indexOf(busca) === -1) return false;
+  var busca = $("fltBusca") ? $("fltBusca").value.trim() : "";
+  if(busca && !casaComBusca(c, busca)) return false;
   var sit = $("fltSituacao") ? $("fltSituacao").value : "";
   if(sit && situacao(c).cls !== sit) return false;
   return true;
@@ -211,7 +233,7 @@ function renderPainel(){
     tr.style.cursor = "pointer";
     tr.title = "Abrir para documentar";
     tr.innerHTML =
-      "<td>" + esc(c.titulo || ("#" + c.id)) + "</td>" +
+      "<td>" + esc(c.titulo || ("#" + c.id)) + (typeof selosDe === "function" ? selosDe(c) : "") + "</td>" +
       "<td>" + esc(c.empresa || "—") + "</td>" +
       "<td>" + esc(c.solicitante || "—") + "</td>" +
       "<td>" + esc(c.categoria || "—") + "</td>" +
@@ -236,4 +258,5 @@ function renderPainel(){
 
   /* o dashboard lê a mesma lista filtrada, então é redesenhado junto */
   if(typeof renderDash === "function") renderDash();
+  aposPainel.forEach(function(f){ f(); });
 }

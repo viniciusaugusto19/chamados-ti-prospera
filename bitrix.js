@@ -229,7 +229,7 @@ function carregarChamados(){
                "updatedBy","movedTime","movedBy","assignedById",
                campos.categoria, campos.subcategoria, campos.prioridade, campos.detalhes,
                campos.empresa, campos.solicitante, campos.externo,
-               campos.primeiroAtend]
+               campos.primeiroAtend, campos.equipamento, campos.resolucao]
     }).then(function(j){
       var itens = (j.result && j.result.items) ? j.result.items : [];
       todos = todos.concat(itens);
@@ -258,6 +258,12 @@ function carregarChamados(){
           semantica: et.semantica,
           aberto: it.createdTime,
           primeiroAtend: it[campos.primeiroAtend],
+          /* texto livre, do jeito que foi digitado: é a chave do histórico por
+             equipamento e das etiquetas de reincidência */
+          equipamento: [].concat(it[campos.equipamento] || []).filter(Boolean).join(", "),
+          /* vem na lista para a busca geral e o "já aconteceu antes" não
+             precisarem de uma chamada por chamado */
+          resolucao: String(it[campos.resolucao] || ""),
           criadoPor: it.createdBy,
           responsavelId: it.assignedById,
           atualizado: it.updatedTime,

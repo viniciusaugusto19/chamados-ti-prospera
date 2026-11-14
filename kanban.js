@@ -70,6 +70,7 @@ function kbCartao(c){
       '<span class="tag ' + s.cls + '">' + esc(s.txt) + "</span></div>" +
     '<div class="kb-titulo">' + esc(c.titulo || ("#" + c.id)) + "</div>" +
     (quem ? '<div class="kb-meta">' + esc(quem) + "</div>" : "") +
+    (typeof selosDe === "function" && selosDe(c) ? '<div style="margin-top:6px">' + selosDe(c) + "</div>" : "") +
     '<div class="kb-pe"><span>' + esc(rotuloCurto(c.prioridade) || "sem prioridade") + "</span>" +
       "<span>" + esc(labelUsuario(c.responsavelId) || "sem responsável") + "</span>" +
       '<span class="kb-h">' + horas + "</span></div>" +
