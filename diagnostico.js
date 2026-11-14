@@ -253,6 +253,88 @@ function dgTarefa(ctx){
   });
 }
 
+/* ---------------- onde mora o inventário de TI ----------------
+   As próximas partes da página (o que a pessoa tem, QR code, parque por
+   situação) leem o inventário, e o inventário é do portal: pode ser um processo
+   inteligente ou uma Lista. Este passo procura pelo nome e mostra, de cada
+   candidato, quantos registros tem e como se chamam os campos.
+
+   Só nomes de campo. Nenhum dado de equipamento ou de pessoa é lido para o
+   texto — a contagem pede só o id. */
+var DG_INV = /invent|ativo|equipament|patrim|notebook|celular|parque/i;
+function dgCamposTexto(fs, soPersonalizados){
+  return Object.keys(fs).filter(function(k){ return !soPersonalizados || /^ufCrm/i.test(k); }).map(function(k){
+    var d = fs[k] || {};
+    return (d.title || d.NAME || k) + " [" + (d.type || d.TYPE || "?") +
+      (d.isMultiple || d.MULTIPLE === "Y" ? ", vários" : "") + "] " + k;
+  });
+}
+function dgUmProcesso(t){
+  var n = null;
+  return bitrixCall("crm.item.list", {entityTypeId: t.entityTypeId, select: ["id"], start: 0})
+    .then(function(j){
+      n = typeof j.total === "number" ? j.total : ((j.result && j.result.items) || []).length;
+    }, function(){ /* sem a contagem, os campos ainda servem */ })
+    .then(function(){ return bitrixCall("crm.item.fields", {entityTypeId: t.entityTypeId}); })
+    .then(function(j){
+      var nomes = dgCamposTexto((j.result && j.result.fields) ? j.result.fields : {}, true);
+      dgLinha("neutral", "Candidato a inventário: " + t.title,
+        "Processo inteligente " + t.entityTypeId + (n !== null ? ", " + n + " registros" : "") + ". " +
+        (nomes.length ? nomes.length + " campos personalizados: " + nomes.join(" · ") + "." : "Sem campos personalizados."));
+    }, function(e){
+      dgLinha("neutral", "Candidato a inventário: " + t.title,
+        "Processo inteligente " + t.entityTypeId + ". Não consegui ler os campos: " + dgMsg(e) + ".");
+    });
+}
+function dgUmaLista(l){
+  return bitrixCall("lists.field.get", {IBLOCK_TYPE_ID: "lists", IBLOCK_ID: l.ID}).then(function(j){
+    var fs = (j.result && typeof j.result === "object") ? j.result : {};
+    var nomes = dgCamposTexto(fs, false);
+    dgLinha("neutral", "Candidato a inventário: " + l.NAME,
+      "Lista " + l.ID + ". " + (nomes.length ? nomes.length + " campos: " + nomes.join(" · ") + "." : "Não devolveu campos."));
+  }, function(e){
+    dgLinha("neutral", "Candidato a inventário: " + l.NAME, "Lista " + l.ID + ". Não consegui ler os campos: " + dgMsg(e) + ".");
+  });
+}
+function dgInventario(ctx){
+  var achou = 0;
+  function emFila(itens, um){
+    return itens.reduce(function(p, x){ return p.then(function(){ return um(x); }); }, Promise.resolve());
+  }
+  return bitrixCall("crm.type.list", {}).then(function(j){
+    var tipos = (j.result && Array.isArray(j.result.types)) ? j.result.types : [];
+    if(!tipos.length) return;
+    dgLinha("neutral", "Processos inteligentes do portal",
+      tipos.length + ": " + tipos.map(function(t){ return t.title + " (" + t.entityTypeId + ")"; }).join(" · ") + ".");
+    var cand = tipos.filter(function(t){
+      return Number(t.entityTypeId) !== Number(B.tipo) && DG_INV.test(t.title || "");
+    }).slice(0, 4);
+    achou += cand.length;
+    return emFila(cand, dgUmProcesso);
+  }, function(e){
+    dgLinha("neutral", "Não consegui listar os processos inteligentes", dgMsg(e) + ".");
+  }).then(function(){
+    return bitrixCall("lists.get", {IBLOCK_TYPE_ID: "lists"}).then(function(j){
+      var listas = Array.isArray(j.result) ? j.result : [];
+      if(!listas.length) return;
+      dgLinha("neutral", "Listas do portal",
+        listas.length + ": " + listas.map(function(l){ return l.NAME + " (" + l.ID + ")"; }).join(" · ") + ".");
+      var cand = listas.filter(function(l){ return DG_INV.test(l.NAME || ""); }).slice(0, 4);
+      achou += cand.length;
+      return emFila(cand, dgUmaLista);
+    }, function(e){
+      var m = dgMsg(e);
+      dgLinha("neutral", "Não consegui ler as Listas do portal",
+        m + (dgSemEscopo(m) ? ". Se o inventário for uma Lista, marque a permissão Listas (lists) no webhook só para " +
+          "este diagnóstico e rode de novo." : "."));
+    });
+  }).then(function(){
+    if(!achou) dgLinha("neutral", "Inventário de TI",
+      "Não achei nenhum processo ou lista com nome de inventário (inventário, ativos, equipamentos, patrimônio, " +
+      "parque). Se ele tem outro nome, está na relação acima: me diga qual é.");
+  });
+}
+
 function dgRodarTudo(){
   if(dgRodando) return;
   dgLinhas = [];
@@ -270,6 +352,7 @@ function dgRodarTudo(){
     .then(function(){ return dgUsuarios(ctx); })
     .then(function(){ return dgFicha(ctx); })
     .then(function(){ return dgTarefa(ctx); })
+    .then(function(){ return dgInventario(ctx); })
     .then(function(){
       dgLinha("neutral", "Gravação não é testada aqui",
         "Este diagnóstico só lê. Criar chamado, salvar a ficha, mover no kanban e incluir tarefa realizada " +
