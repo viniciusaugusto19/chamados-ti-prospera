@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chamados TI Prospera</title>
+<meta name="theme-color" content="#0A0F0B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
@@ -23,6 +26,7 @@
       <button role="tab" aria-selected="false" data-tab="documentar">Documentar</button>
       <button role="tab" aria-selected="false" data-tab="conexao"><span class="dot off" id="connDot"></span>Bitrix</button>
     </nav>
+    <button class="ghost" id="btnInstalar" type="button" title="Instalar como aplicativo neste computador" hidden>Instalar</button>
     <button class="ghost" id="btnTema" type="button">Tema</button>
   </div>
 </header>
@@ -624,6 +628,15 @@
   </div>
 
   <div class="card">
+    <h3>Instalar como aplicativo</h3>
+    <div class="hint" id="instEstado" style="margin:0 0 12px"></div>
+    <button class="primary" id="btnInstalar2" type="button" hidden>Instalar</button>
+    <div class="hint">Instalada, a página abre em janela própria e também <b>sem internet</b>: a Captura rápida
+      funciona e a fila fica guardada até a rede voltar. Painel, ficha e tudo o que fala com o Bitrix precisam de
+      rede. A versão nova passa a chegar sozinha, sem Ctrl+Shift+R.</div>
+  </div>
+
+  <div class="card">
     <h3>O que o teste verifica</h3>
     <div class="tablewrap">
       <table>
@@ -661,5 +674,6 @@
 <script src="cronometro.js"></script>
 <script src="app.js"></script>
 <script src="boot.js"></script>
+<script src="instalar.js"></script>
 </body>
 </html>
