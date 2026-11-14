@@ -148,7 +148,7 @@
   <div class="card">
     <h3>Filtros</h3>
     <div class="filtros">
-      <input type="text" id="fltBusca" placeholder="Buscar no nome do chamado" autocomplete="off">
+      <input type="text" id="fltBusca" placeholder="Buscar em nome, solicitante, equipamento, resolução…" autocomplete="off">
       <select id="fltEmpresa" data-nome="empresa"><option value="">Todas as empresas</option></select>
       <select id="fltResp" data-nome="responsável"><option value="">Todos os responsáveis</option></select>
       <select id="fltPrioridade" data-nome="prioridade"><option value="">Todas as prioridades</option></select>
@@ -218,6 +218,19 @@
       <div class="bloco">
         <h3>Por categoria</h3>
         <ul class="barras" id="dashCategorias"></ul>
+      </div>
+
+      <div class="bloco">
+        <h3>Equipamentos que mais voltam</h3>
+        <ul class="barras" id="dashReincEq"></ul>
+        <div class="hint" id="dashReincNota"></div>
+      </div>
+
+      <div class="bloco">
+        <h3>Quem mais abriu chamado</h3>
+        <ul class="barras" id="dashReincSol"></ul>
+        <div class="hint">Os dois contam os últimos 30 dias, incluindo o que já foi concluído. Três ou mais
+          do mesmo equipamento ou da mesma pessoa viram o selo <b>reincidente</b>.</div>
       </div>
 
       <div class="bloco">
@@ -336,6 +349,18 @@
   <h2>Abrir chamado</h2>
   <p class="lead">Os campos obrigatórios ficam aqui em cima. O resto está recolhido — abra só o que o chamado precisar.</p>
 
+  <div class="card" style="padding:13px 16px">
+    <div class="lote-topo" style="margin:0">
+      <label for="fModelo" style="margin:0;white-space:nowrap">Modelo</label>
+      <select id="fModelo"><option value="">Em branco</option></select>
+      <button class="mini danger" id="btnModeloApagar" type="button" hidden>apagar modelo</button>
+      <span style="flex:1"></span>
+      <input type="text" id="fModeloNome" maxlength="60" placeholder="Nome do modelo" autocomplete="off" style="width:auto;flex:0 1 200px">
+      <button class="ghost" id="btnModeloSalvar" type="button">Salvar formulário como modelo</button>
+    </div>
+    <div class="hint" id="modeloAviso"></div>
+  </div>
+
   <div class="card">
     <h3>Obrigatório</h3>
     <div class="field" style="margin-bottom:13px">
@@ -370,6 +395,11 @@
     <div class="field" style="margin-top:13px">
       <label for="fDetalhes">Detalhes do chamado <span class="req">*</span></label>
       <textarea id="fDetalhes" placeholder="O que o solicitante relatou, com as palavras dele."></textarea>
+    </div>
+    <div class="field" style="margin-top:13px">
+      <label for="fPassos">Próximos passos</label>
+      <textarea id="fPassos" placeholder="Um passo por linha. Entram no chamado como a lista de Próximos passos."></textarea>
+      <div class="hint">Opcional. É o que os modelos de Admissão e Desligamento preenchem.</div>
     </div>
   </div>
 
@@ -473,11 +503,12 @@
         <div id="sub-fparecidos" style="margin-bottom:14px" hidden>
           <div class="bloco">
             <h3>Já aconteceu antes</h3>
+            <div class="hint" id="pcResumo" style="margin:0 0 11px"></div>
             <ul class="coment" id="pcLista"></ul>
             <div class="vazio-mini" id="pcVazio">Nenhum chamado parecido entre os que a página carregou.</div>
-            <div class="hint" style="margin-top:11px">Parecido aqui é conta simples: palavras do nome em comum e mesma
-              subcategoria, entre os chamados que o painel carregou (os 300 mais recentes). Cada linha diz por
-              que entrou. Não é busca no portal inteiro.</div>
+            <div class="hint" style="margin-top:11px">Parecido aqui é conta simples: mesmo equipamento, palavras do
+              nome em comum e mesma subcategoria, entre os chamados que o painel carregou (os 300 mais recentes).
+              Cada linha diz por que entrou. Não é busca no portal inteiro.</div>
           </div>
         </div>
 
@@ -664,6 +695,7 @@
 <script src="bitrix.js"></script>
 <script src="painel.js"></script>
 <script src="dash.js"></script>
+<script src="etiquetas.js"></script>
 <script src="kanban.js"></script>
 <script src="relatorio.js"></script>
 <script src="importar.js"></script>
@@ -673,6 +705,7 @@
 <script src="diagnostico.js"></script>
 <script src="cronometro.js"></script>
 <script src="app.js"></script>
+<script src="modelos.js"></script>
 <script src="boot.js"></script>
 <script src="instalar.js"></script>
 </body>
