@@ -1,4 +1,15 @@
 "use strict";
+/* ---------------- servidor de acesso ----------------
+   Vazio: a página funciona como sempre, com o webhook guardado no navegador de
+   cada um. Preenchido: a página exige login e o webhook passa a ficar no
+   servidor (ver acesso.js e a pasta servidor/).
+
+   Os dois valores são públicos por natureza — o endereço do projeto e a chave
+   "publishable", feita para estar em página. A chave secreta do projeto nunca
+   vem para cá. */
+var SERVIDOR = {url: "https://esuknexckqovpgmqylwq.supabase.co",
+                chave: "sb_publishable_Y4VuXVEIWHnLP4wHQB5r-g_JY9YDXr4"};
+
 /* ---------------- SLA ---------------- */
 var SLA = [
   {n:"Alta",                h:4,   t:"Até 4 horas úteis — operação parada ou risco de perda de dados"},

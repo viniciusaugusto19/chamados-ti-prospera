@@ -1,12 +1,20 @@
 "use strict";
 function bitrixCall(metodo, params){
-  var wh = load(K.wh, "");
-  if(!wh) return Promise.reject(new Error("sem webhook"));
-  return fetch(wh + "/" + metodo + ".json", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify(params || {})
-  }).then(function(r){ return r.json(); })
-    .then(function(j){
+  var envio;
+  if(SERVIDOR.url){
+    /* com servidor de acesso, quem fala com o Bitrix é ele: o webhook de cada
+       pessoa fica lá, e o pedido vai com a sessão de quem entrou (acesso.js) */
+    if(typeof acessoBitrix !== "function") return Promise.reject(new Error("a tela de acesso ainda não carregou"));
+    envio = acessoBitrix(metodo, params);
+  } else {
+    var wh = load(K.wh, "");
+    if(!wh) return Promise.reject(new Error("sem webhook"));
+    envio = fetch(wh + "/" + metodo + ".json", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(params || {})
+    }).then(function(r){ return r.json(); });
+  }
+  return envio.then(function(j){
       if(j.error) throw new Error(j.error_description || j.error);
       /* o item lido vem com id de opção nos campos de lista; troca pelo texto
          antes de chegar na tela. O motivo de pausa fica de fora de propósito:
