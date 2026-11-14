@@ -444,6 +444,7 @@
         <nav class="subtabs" aria-label="Partes do chamado">
           <button type="button" data-sub="fdoc" aria-selected="true">Documentação</button>
           <button type="button" data-sub="ftarefas" aria-selected="false">Tarefas realizadas <span id="cntTarefas"></span></button>
+          <button type="button" data-sub="fparecidos" aria-selected="false">Já aconteceu antes <span id="cntParecidos"></span></button>
         </nav>
 
         <div id="sub-ftarefas" style="margin-bottom:14px" hidden>
@@ -462,6 +463,17 @@
               <button class="mini" id="tfDeNovo" type="button" hidden>Procurar de novo</button>
             </div>
             <div class="hint" id="tfEstado"></div>
+          </div>
+        </div>
+
+        <div id="sub-fparecidos" style="margin-bottom:14px" hidden>
+          <div class="bloco">
+            <h3>Já aconteceu antes</h3>
+            <ul class="coment" id="pcLista"></ul>
+            <div class="vazio-mini" id="pcVazio">Nenhum chamado parecido entre os que a página carregou.</div>
+            <div class="hint" style="margin-top:11px">Parecido aqui é conta simples: palavras do nome em comum e mesma
+              subcategoria, entre os chamados que o painel carregou (os 300 mais recentes). Cada linha diz por
+              que entrou. Não é busca no portal inteiro.</div>
           </div>
         </div>
 
@@ -597,6 +609,21 @@
   </div>
 
   <div class="card">
+    <h3>Diagnóstico do portal</h3>
+    <div class="hint" style="margin:0 0 12px">
+      Confere de uma vez tudo o que a página espera do seu Bitrix: permissões do webhook, etapas do funil,
+      campos do chamado, prioridades com prazo, e se a tarefa do atendimento nasce ligada ao chamado.
+      <b>Só lê</b> — não cria, não altera e não apaga nada no portal. O texto copiado não leva a URL do webhook.
+    </div>
+    <div class="row-end" style="justify-content:flex-start;margin-top:0">
+      <button class="primary" id="dgRodar" type="button">Rodar diagnóstico</button>
+      <button class="ghost" id="dgCopiar" type="button" hidden>Copiar resultado</button>
+      <span class="hint" id="dgResumo" style="margin-top:0"></span>
+    </div>
+    <ul class="risco" id="dgLista" style="margin-top:12px"></ul>
+  </div>
+
+  <div class="card">
     <h3>O que o teste verifica</h3>
     <div class="tablewrap">
       <table>
@@ -629,6 +656,8 @@
 <script src="importar.js"></script>
 <script src="doc.js"></script>
 <script src="tarefas.js"></script>
+<script src="parecidos.js"></script>
+<script src="diagnostico.js"></script>
 <script src="cronometro.js"></script>
 <script src="app.js"></script>
 <script src="boot.js"></script>
