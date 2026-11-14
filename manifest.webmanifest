@@ -1,0 +1,21 @@
+{
+  "name": "Chamados TI Prospera",
+  "short_name": "Chamados TI",
+  "description": "Captura, painel e documentação dos chamados de TI no Bitrix24.",
+  "lang": "pt-BR",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0A0F0B",
+  "theme_color": "#0A0F0B",
+  "icons": [
+    {"src": "icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+    {"src": "icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "Captura rápida", "url": "./#captura"},
+    {"name": "Painel", "url": "./#painel"},
+    {"name": "Abrir chamado", "url": "./#abrir"}
+  ]
+}
