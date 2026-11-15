@@ -7,6 +7,14 @@ montarSelectsAbrir();
 if(load(K.wh, "")) $("statusCarga").textContent = "Webhook conectado. Abra o painel para carregar.";
 $("capQuem").focus();
 
+/* partes que se penduram na página depois do início: favoritos, cópia de
+   segurança, meu desempenho (ver extras.js) */
+(function(){
+  var s = document.createElement("script");
+  s.src = "extras.js";
+  document.body.appendChild(s);
+})();
+
 /* com servidor de acesso configurado, a tela de entrar vem antes de tudo. A
    página fica escondida até ela decidir o que mostrar. */
 if(SERVIDOR.url){
