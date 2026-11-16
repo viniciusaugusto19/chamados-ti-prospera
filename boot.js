@@ -15,6 +15,14 @@ $("capQuem").focus();
   document.body.appendChild(s);
 })();
 
+/* inventário de TI: equipamentos na ficha, aba Parque, QR da etiqueta (ver
+   inventario.js). O gerador de QR (qr.js) só é lido na hora de imprimir. */
+(function(){
+  var s = document.createElement("script");
+  s.src = "inventario.js";
+  document.body.appendChild(s);
+})();
+
 /* com servidor de acesso configurado, a tela de entrar vem antes de tudo. A
    página fica escondida até ela decidir o que mostrar. */
 if(SERVIDOR.url){
