@@ -228,26 +228,57 @@ function carregarChamados(){
   if(!load(K.wh, "")){ st.textContent = "Sem webhook. Conecte na aba Bitrix."; return; }
   st.textContent = "Carregando...";
   var todos = [], campos = B.campo;
+  var selecao = ["id","title","stageId","createdTime","createdBy","updatedTime",
+                 "updatedBy","movedTime","movedBy","assignedById",
+                 campos.categoria, campos.subcategoria, campos.prioridade, campos.detalhes,
+                 campos.empresa, campos.solicitante, campos.externo,
+                 campos.primeiroAtend, campos.equipamento, campos.resolucao];
   function pagina(start){
     return bitrixCall("crm.item.list", {
       entityTypeId: B.tipo,
       order: {id: "DESC"},
       start: start,
-      select: ["id","title","stageId","createdTime","createdBy","updatedTime",
-               "updatedBy","movedTime","movedBy","assignedById",
-               campos.categoria, campos.subcategoria, campos.prioridade, campos.detalhes,
-               campos.empresa, campos.solicitante, campos.externo,
-               campos.primeiroAtend, campos.equipamento, campos.resolucao]
+      select: selecao
     }).then(function(j){
       var itens = (j.result && j.result.items) ? j.result.items : [];
       todos = todos.concat(itens);
       if(j.next && todos.length < 300) return pagina(j.next);
     });
   }
+  /* o processo costuma ter mais chamados do que os 300 mais recentes. Um
+     chamado antigo que continua aberto não pode sumir do painel: depois dos
+     300, uma segunda leitura traz só os abertos mais antigos (etapa em andamento).
+     Se o portal recusar o filtro, segue com os 300 e avisa na linha de status. */
+  var antigosAbertos = 0, antigosFalhou = false;
+  function maisAntigosAbertos(){
+    if(todos.length < 300) return Promise.resolve();
+    var menor = Math.min.apply(null, todos.map(function(it){ return Number(it.id); }));
+    if(!isFinite(menor)) return Promise.resolve();
+    var achados = [];
+    function pag(start){
+      return bitrixCall("crm.item.list", {
+        entityTypeId: B.tipo,
+        order: {id: "DESC"},
+        start: start,
+        filter: {"<id": menor, "=stageSemanticId": "P"},
+        select: selecao
+      }).then(function(j){
+        var itens = (j.result && j.result.items) ? j.result.items : [];
+        achados = achados.concat(itens);
+        if(j.next && itens.length && achados.length < 250) return pag(j.next);
+      });
+    }
+    return pag(0).then(function(){
+      var tem = {};
+      todos.forEach(function(it){ tem[it.id] = true; });
+      achados.forEach(function(it){ if(!tem[it.id]){ todos.push(it); antigosAbertos++; } });
+    }).catch(function(){ antigosFalhou = true; });
+  }
   carregarEtapas()
     .then(function(){ return carregarMetaCampos(); })
     .then(function(){ return carregarEu(); })
     .then(function(){ return pagina(0); })
+    .then(function(){ return maisAntigosAbertos(); })
     .then(function(){
       var deBitrix = todos.map(function(it){
         var et = etapasBitrix[it.stageId] || {};
@@ -289,7 +320,9 @@ function carregarChamados(){
       if(typeof detectarNovos === "function") detectarNovos(deBitrix);
       if(typeof detectarPrazos === "function") detectarPrazos(deBitrix);
       st.textContent = deBitrix.length + " chamados lidos do Bitrix em " +
-        new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) + ".";
+        new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) + "." +
+        (antigosAbertos ? " Inclui " + antigosAbertos + " abertos mais antigos que os 300 mais recentes." : "") +
+        (antigosFalhou ? " Não consegui buscar os abertos mais antigos: os de fora dos 300 mais recentes não aparecem." : "");
       renderPainel(); renderSelectChamados();
       /* os nomes chegam depois; quando chegarem, o painel se redesenha */
       var ids = [];
