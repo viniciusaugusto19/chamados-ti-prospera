@@ -1,7 +1,7 @@
 "use strict";
-/* ---------------- inventário de TI (v30) ----------------
-   Lê o processo inteligente "Inventário de TI" (1040) do Bitrix, só leitura,
-   e usa o que vem de lá em quatro lugares:
+/* ---------------- inventário de TI (v30, cadastro novo na v31) ----------------
+   Lê o processo inteligente "Inventário de TI" (1040) do Bitrix, e só cadastra
+   equipamento novo (nunca edita), e usa o que vem de lá em quatro lugares:
      - na ficha do chamado: os equipamentos de quem pediu, com atalho do AnyDesk;
      - na aba Parque: situação, garantia vencendo e etiquetas com QR code;
      - no QR code colado no equipamento: abre Abrir chamado já preenchido;
@@ -29,7 +29,7 @@ var INV_C = {
 };
 K.qrInv = "ctip.qrInv";
 
-var INV = {itens: null, carregando: null, quando: null, erro: "", enums: {}};
+var INV = {itens: null, carregando: null, quando: null, erro: "", enums: {}, meta: {}};
 var INV_DIAS_ALERTA = 60;
 
 /* ---------------- leitura ---------------- */
@@ -86,6 +86,8 @@ function invCarregar(forcar){
       var fs = (j.result && j.result.fields) ? j.result.fields : {};
       Object.keys(fs).forEach(function(cid){
         var d = fs[cid] || {};
+        /* o que o portal diz de cada campo: é daqui que o cadastro sabe o que é obrigatório */
+        INV.meta[cid] = {titulo: d.formLabel || d.listLabel || d.title || cid, obrig: !!d.isRequired, multi: !!d.isMultiple};
         if(d.type === "enumeration" && d.items){
           var m = {};
           d.items.forEach(function(i){ m[i.ID] = i.VALUE; });
@@ -204,6 +206,7 @@ function invCopiar(txt){
     "a.mini{text-decoration:none;display:inline-block}" +
     "#invFicha h4{margin:12px 0 2px;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}" +
     "#invBuscaFicha{max-width:420px}" +
+    "#invNovo input[type=date]{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);color-scheme:dark light}" +
     "#tab-parque .tile-linha{margin:12px 0}" +
     "#tab-parque .tile.on{border-color:var(--laranja)}" +
     "#tab-parque .tile.crit b{color:var(--crit)} #tab-parque .tile.warn b{color:var(--warn)}" +
@@ -402,12 +405,15 @@ var invMarcados = {};
   s.id = "tab-parque"; s.hidden = true;
   s.innerHTML =
     "<h2>Parque de equipamentos</h2>" +
-    '<p class="lead">Lido do processo <b>Inventário de TI</b> do Bitrix, só leitura: o cadastro continua lá e é lá que se edita. ' +
-    "A página pede só os campos de equipamento; o CPF, o RG e os anexos que existem nesse cadastro não são lidos. " +
+    '<p class="lead">Lido do processo <b>Inventário de TI</b> do Bitrix. A página lê e cadastra equipamento novo; ' +
+    "para corrigir um cadastro que já existe, use o portal. " +
+    "A página pede só os campos de equipamento; o CPF, o RG e os anexos que existem nesse cadastro não são lidos nem gravados. " +
     "Nada fica guardado neste navegador.</p>" +
     '<div class="card" style="padding:13px 16px"><div class="lote-topo" style="margin:0">' +
       '<button class="primary" type="button" id="invAtualizar">Carregar do Bitrix</button>' +
+      '<button class="ghost" type="button" id="invNovoBtn">Novo equipamento</button>' +
       '<span class="hint" id="invStatus" style="margin:0"></span></div></div>' +
+    '<div class="card" id="invNovo" style="display:none"></div>' +
     '<div id="invResumo"></div>' +
     '<div class="card"><div class="lote-topo">' +
       '<input type="text" id="invBusca" placeholder="Buscar por pessoa, série, modelo, local…" autocomplete="off" style="flex:1 1 220px">' +
@@ -448,6 +454,9 @@ var invMarcados = {};
   });
 
   $("invAtualizar").addEventListener("click", function(){ invAtualizar(true); });
+  $("invNovoBtn").addEventListener("click", function(){ invNovoAbrir(); });
+  $("invNovo").addEventListener("input", function(e){ invNovoEntrada(e); });
+  $("invNovo").addEventListener("click", function(e){ invNovoClique(e); });
   $("invBusca").addEventListener("input", function(){ invFiltro.busca = this.value; invPintarParque(); });
   $("invFStatus").addEventListener("change", function(){ invFiltro.status = this.value; invPintarParque(); });
   $("invFTipo").addEventListener("change", function(){ invFiltro.tipo = this.value; invPintarParque(); });
@@ -658,6 +667,204 @@ function invImprimir(ids){
     window.addEventListener("afterprint", fim);
     window.print();
   }).catch(function(e){ toast(e.message); });
+}
+
+/* ---------------- cadastro de equipamento novo ----------------
+   Só cria (crm.item.add). Não edita o que já existe. Os campos são os mesmos
+   que a página já lê; obrigatório é o que o portal marca como obrigatório mais
+   o mínimo para o equipamento ser achado depois (tipo, marca, modelo, série,
+   situação). O servidor de acesso recusa qualquer outro campo. */
+var INV_FORM = [
+  {k: "tipo",       rot: "Tipo",             sel: true,  obrig: true},
+  {k: "status",     rot: "Situação",         sel: true,  obrig: true},
+  {k: "marca",      rot: "Marca",            lista: true, obrig: true},
+  {k: "modelo",     rot: "Modelo",           lista: true, obrig: true},
+  {k: "serie",      rot: "Número de série",  obrig: true, dica: "É por ele que o chamado, o QR e o histórico acham o equipamento. Não pode repetir um já cadastrado."},
+  {k: "usuario",    rot: "Pessoa que usa",   lista: true, dica: "Nome completo, igual aos outros cadastros (as sugestões saem deles). Vazio se estiver em estoque."},
+  {k: "local",      rot: "Local",            lista: true},
+  {k: "aquisicao",  rot: "Data de aquisição", data: true},
+  {k: "garantia",   rot: "Garantia até",     data: true},
+  {k: "seguro",     rot: "Seguro",           sel: true},
+  {k: "imei",       rot: "IMEI (celular)"},
+  {k: "chip",       rot: "Chip / linha (celular)"},
+  {k: "teamviewer", rot: "TeamViewer"},
+  {k: "anydesk",    rot: "AnyDesk (ID)"}
+];
+var invNovoManual = false;
+
+function invNovoObrig(f){
+  var m = INV.meta[INV_C[f.k]];
+  return !!(f.obrig || (m && m.obrig));
+}
+function invNovoUnicos(campo){
+  var vistos = {}, l = [];
+  (INV.itens || []).forEach(function(it){
+    var v = it[campo], c = String(v || "").toLowerCase();
+    if(v && !vistos[c]){ vistos[c] = 1; l.push(v); }
+  });
+  l.sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+  return l.slice(0, 400);
+}
+function invNovoCampo(f){
+  var cid = INV_C[f.k], id = "invN_" + f.k, ctl;
+  var rot = esc(f.rot) + (invNovoObrig(f) ? ' <span class="req">*</span>' : "");
+  if(f.sel){
+    var m = INV.enums[cid] || {};
+    ctl = '<select id="' + id + '"><option value="">—</option>' + Object.keys(m).map(function(k){
+      return '<option value="' + esc(k) + '">' + esc(m[k]) + "</option>";
+    }).join("") + "</select>";
+  } else if(f.data){
+    ctl = '<input type="date" id="' + id + '">';
+  } else {
+    ctl = '<input type="text" id="' + id + '" maxlength="200" autocomplete="off"' + (f.lista ? ' list="invDl_' + f.k + '"' : "") + ">";
+    if(f.lista){
+      ctl += '<datalist id="invDl_' + f.k + '">' + invNovoUnicos(f.k).map(function(v){
+        return '<option value="' + esc(v) + '"></option>';
+      }).join("") + "</datalist>";
+    }
+  }
+  return '<div class="field"><label for="' + id + '">' + rot + "</label>" + ctl +
+    (f.dica ? '<div class="hint">' + esc(f.dica) + "</div>" : "") + "</div>";
+}
+function invNovoExtrasObrig(){
+  var proprios = {};
+  Object.keys(INV_C).forEach(function(k){ proprios[INV_C[k]] = 1; });
+  return Object.keys(INV.meta).filter(function(cid){
+    return /^ufCrm/.test(cid) && !proprios[cid] && INV.meta[cid].obrig;
+  }).map(function(cid){ return INV.meta[cid].titulo; });
+}
+function invNovoAbrir(){
+  if(!load(K.wh, "")){ toast("Sem Bitrix ligado. Conecte na aba Bitrix."); return; }
+  var caixa = $("invNovo");
+  if(!INV.itens){
+    $("invStatus").textContent = "Carregando o inventário antes de abrir o cadastro…";
+    invCarregar().then(function(){ invTudo(); invNovoAbrir(); }, function(e){
+      $("invStatus").textContent = "Falhou: " + e.message;
+    });
+    return;
+  }
+  if(!Object.keys(INV.enums[INV_C.tipo] || {}).length || !Object.keys(INV.enums[INV_C.status] || {}).length){
+    toast("Não consegui ler as opções de Tipo e Situação do portal. Clique em Carregar do Bitrix e tente de novo.");
+    return;
+  }
+  invNovoManual = false;
+  var exemplos = [];
+  INV.itens.forEach(function(it){ if(it.titulo && exemplos.length < 3 && exemplos.indexOf(it.titulo) === -1) exemplos.push(it.titulo); });
+  var extras = invNovoExtrasObrig();
+  caixa.innerHTML = "<h3>Novo equipamento</h3>" +
+    '<div class="hint" style="margin:0 0 12px">Cria um cadastro novo no Inventário de TI do Bitrix. Campos com <span class="req">*</span> são obrigatórios.' +
+    (extras.length ? " O portal também marca como obrigatório: <b>" + esc(extras.join(", ")) + "</b>. A página não preenche esses campos de propósito; se o Bitrix recusar, cadastre esse equipamento direto no portal." : "") +
+    "</div>" +
+    '<div class="grid g2">' + INV_FORM.map(invNovoCampo).join("") + "</div>" +
+    '<div class="field" style="margin-top:13px"><label for="invN_titulo">Nome do cadastro <span class="req">*</span></label>' +
+      '<input type="text" id="invN_titulo" maxlength="200" autocomplete="off">' +
+      '<div class="hint">Vem pronto de marca e modelo; pode trocar.' +
+      (exemplos.length ? " Hoje os cadastros se chamam, por exemplo: " + esc(exemplos.join(" · ")) + "." : "") + "</div></div>" +
+    '<div class="lote-topo" style="margin-top:14px"><button class="primary" type="button" id="invNovoSalvar">Cadastrar no Bitrix</button>' +
+      '<button class="ghost" type="button" id="invNovoFechar">Fechar</button></div>' +
+    '<div class="hint" id="invNovoAviso" role="status" style="margin-top:10px"></div>';
+  caixa.style.display = "";
+  $("invN_tipo").focus();
+}
+function invNovoTitulo(){
+  if(invNovoManual) return;
+  var t = $("invN_titulo");
+  if(t) t.value = [$("invN_marca").value.trim(), $("invN_modelo").value.trim()].filter(Boolean).join(" ");
+}
+function invNovoEntrada(e){
+  var id = e.target && e.target.id;
+  if(id === "invN_titulo") invNovoManual = true;
+  else if(id === "invN_marca" || id === "invN_modelo") invNovoTitulo();
+}
+function invNovoClique(e){
+  var alvo = e.target;
+  if(!alvo || !alvo.id){
+    var et = alvo && alvo.getAttribute ? alvo.getAttribute("data-inv-nova-et") : null;
+    if(et) invImprimir([et]);
+    return;
+  }
+  if(alvo.id === "invNovoSalvar") invNovoSalvar();
+  else if(alvo.id === "invNovoFechar") $("invNovo").style.display = "none";
+  else if(alvo.id === "invNovoOutro") invNovoOutro();
+}
+function invNovoAviso(txt, cor, html){
+  var a = $("invNovoAviso");
+  if(!a) return;
+  a.style.color = cor || "var(--muted)";
+  if(html) a.innerHTML = txt; else a.textContent = txt;
+}
+function invNovoValores(){
+  var v = {};
+  INV_FORM.forEach(function(f){ v[f.k] = $("invN_" + f.k).value.trim(); });
+  v.titulo = $("invN_titulo").value.trim();
+  return v;
+}
+/* série comparada sem espaço, traço nem caixa: "ab-123" e "AB 123" são a mesma */
+function invSerieChave(s){
+  return String(s || "").toLowerCase().replace(/[\s\-_.]/g, "");
+}
+function invNovoProblemas(v){
+  var p = [];
+  var faltam = INV_FORM.filter(function(f){ return invNovoObrig(f) && !v[f.k]; }).map(function(f){ return f.rot; });
+  if(!v.titulo) faltam.push("Nome do cadastro");
+  if(faltam.length) p.push("Falta preencher: " + faltam.join(", ") + ".");
+  if(v.serie){
+    var ch = invSerieChave(v.serie);
+    var igual = null;
+    INV.itens.forEach(function(it){ if(!igual && invSerieChave(it.serie) === ch) igual = it; });
+    if(igual){
+      p.push("A série " + v.serie + " já está cadastrada: " + invNome(igual) + (igual.usuario ? ", com " + igual.usuario : "") +
+        ". Para corrigir esse cadastro, use o portal.");
+    }
+  }
+  if(v.aquisicao && v.garantia && v.garantia < v.aquisicao) p.push("A garantia termina antes da data de aquisição. Confira as datas.");
+  return p;
+}
+function invNovoCampos(v){
+  var campos = {title: v.titulo};
+  INV_FORM.forEach(function(f){
+    var val = v[f.k];
+    if(!val) return;
+    var m = INV.meta[INV_C[f.k]];
+    campos[INV_C[f.k]] = (f.sel && m && m.multi) ? [val] : val;
+  });
+  return campos;
+}
+function invNovoSalvar(){
+  var v = invNovoValores();
+  var p = invNovoProblemas(v);
+  if(p.length){ invNovoAviso(p.join(" "), "var(--crit)"); return; }
+  var btn = $("invNovoSalvar");
+  btn.disabled = true;
+  invNovoAviso("Cadastrando no Bitrix…");
+  var campos = invNovoCampos(v);
+  bitrixCall("crm.item.add", {entityTypeId: INV_TIPO, fields: campos}).then(function(j){
+    var novo = j.result && j.result.item ? j.result.item : null;
+    if(!novo || !novo.id) throw new Error("o Bitrix respondeu sem o número do cadastro");
+    /* entra na lista na hora, para a etiqueta e a busca já enxergarem; a
+       releitura logo abaixo confere com o que o portal guardou */
+    var cru = {id: novo.id, title: v.titulo};
+    Object.keys(campos).forEach(function(c){ if(c !== "title") cru[c] = campos[c]; });
+    INV.itens.push(invNormalizar(cru));
+    invTudo();
+    invNovoAviso('Equipamento <b>#' + esc(novo.id) + "</b> cadastrado no Bitrix. " +
+      '<button class="mini" type="button" data-inv-nova-et="' + esc(novo.id) + '">imprimir etiqueta</button> ' +
+      '<button class="mini" type="button" id="invNovoOutro">cadastrar outro igual</button> ' +
+      '<a class="mini" href="' + B.portal + "/crm/type/" + INV_TIPO + "/details/" + esc(novo.id) + '/" target="_blank" rel="noopener">abrir no portal</a>',
+      "var(--good)", true);
+    toast("Equipamento #" + novo.id + " cadastrado.");
+    invCarregar(true).then(invTudo, function(){ /* a linha já está na lista; a releitura é só conferência */ });
+  }).catch(function(e){
+    btn.disabled = false;
+    invNovoAviso("Não cadastrou: " + e.message, "var(--crit)");
+  }).then(function(){ var b = $("invNovoSalvar"); if(b) b.disabled = false; });
+}
+/* "cadastrar outro igual": mantém o que costuma se repetir numa compra (tipo,
+   marca, modelo, local, situação, datas, seguro) e limpa o que é de cada unidade */
+function invNovoOutro(){
+  ["serie", "usuario", "imei", "chip", "teamviewer", "anydesk"].forEach(function(k){ $("invN_" + k).value = ""; });
+  invNovoAviso("");
+  $("invN_serie").focus();
 }
 
 /* ---------------- ligação com o resto da página ---------------- */
