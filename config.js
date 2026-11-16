@@ -152,6 +152,19 @@ function slaDeLabel(label){
   for(var i=0;i<SLA.length;i++){
     if(txt.indexOf(SLA[i].n) === 0 && (!achado || SLA[i].n.length > achado.n.length)) achado = SLA[i];
   }
+  /* opção do portal escrita só com o prazo, sem o nome ("(15 dias úteis)"): vale
+     quando um único prazo da tabela tem esse número de dias úteis. Se houver
+     mais de um (3 dias úteis serve a quatro), continua sem SLA em vez de chutar. */
+  if(!achado){
+    var dm = /(\d+)\s*dias úteis/.exec(txt);
+    if(dm){
+      var iguais = SLA.filter(function(x){
+        var m = /(\d+)\s*dias úteis/.exec(x.t);
+        return m && m[1] === dm[1];
+      });
+      if(iguais.length === 1) achado = iguais[0];
+    }
+  }
   return achado;
 }
 function rotuloCurto(label){
