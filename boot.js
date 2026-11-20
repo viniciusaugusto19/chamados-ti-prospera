@@ -31,6 +31,14 @@ $("capQuem").focus();
   document.body.appendChild(s);
 })();
 
+/* v33: avaliação de satisfação, histórico de equipamento, rotinas e
+   vencimentos (ver servico.js). Só aparece com o servidor de acesso. */
+(function(){
+  var s = document.createElement("script");
+  s.src = "servico.js";
+  document.body.appendChild(s);
+})();
+
 /* com servidor de acesso configurado, a tela de entrar vem antes de tudo. A
    página fica escondida até ela decidir o que mostrar. */
 if(SERVIDOR.url){
