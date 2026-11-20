@@ -23,6 +23,14 @@ $("capQuem").focus();
   document.body.appendChild(s);
 })();
 
+/* v32: feriados, respostas prontas, relatórios, termo de responsabilidade e
+   leitor de QR (ver mais.js). Espera o inventario.js sozinho. */
+(function(){
+  var s = document.createElement("script");
+  s.src = "mais.js";
+  document.body.appendChild(s);
+})();
+
 /* com servidor de acesso configurado, a tela de entrar vem antes de tudo. A
    página fica escondida até ela decidir o que mostrar. */
 if(SERVIDOR.url){
