@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Avaliar atendimento — TI Prospera</title>
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="stylesheet" href="estilo.css">
+<style>
+  .av-pag{max-width:520px;margin:0 auto;padding:28px 16px 40px}
+  .av-pag h1{font-size:1.25rem;margin:0 0 6px}
+  .av-pag .sub{color:var(--muted);margin:0 0 18px;font-size:.92rem}
+  .av-notas{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0 6px}
+  .av-notas button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 4px;border:1px solid var(--line);
+    border-radius:10px;background:var(--surface);color:var(--fg);font-size:1.3rem;font-weight:700;cursor:pointer}
+  .av-notas button span{font-size:.66rem;font-weight:500;color:var(--muted);text-align:center;line-height:1.15}
+  .av-notas button.on{border-color:var(--laranja);box-shadow:0 0 0 2px var(--laranja) inset}
+  .av-pag textarea{width:100%;min-height:96px;margin-top:6px}
+  .av-msg{margin-top:12px;font-size:.92rem}
+</style>
+</head>
+<body>
+<main class="av-pag">
+  <div class="card" id="avCard">
+    <h1>Como foi o atendimento da TI?</h1>
+    <p class="sub" id="avSobre">Carregando…</p>
+    <div id="avForm" hidden>
+      <div class="av-notas" id="avNotas" role="radiogroup" aria-label="Nota de 1 a 5">
+        <button type="button" data-n="1">1<span>Muito ruim</span></button>
+        <button type="button" data-n="2">2<span>Ruim</span></button>
+        <button type="button" data-n="3">3<span>Regular</span></button>
+        <button type="button" data-n="4">4<span>Bom</span></button>
+        <button type="button" data-n="5">5<span>Ótimo</span></button>
+      </div>
+      <label for="avComent" style="margin-top:12px;display:block">Quer contar alguma coisa? (opcional)</label>
+      <textarea id="avComent" maxlength="500" placeholder="O que foi bom, o que podia ser melhor…"></textarea>
+      <div class="lote-topo" style="margin-top:12px"><button class="primary" type="button" id="avEnviar" disabled>Enviar avaliação</button></div>
+    </div>
+    <div class="av-msg" id="avMsg" role="status"></div>
+  </div>
+  <p class="hint" style="text-align:center;margin-top:14px">TI Prospera · a sua resposta vai só para a equipe de TI.</p>
+</main>
+<script src="config.js"></script>
+<script>
+"use strict";
+(function(){
+  var token = (/[?&]t=([A-Za-z0-9]{20,64})/.exec(location.search) || [])[1] || "";
+  var nota = 0;
+  var el = function(id){ return document.getElementById(id); };
+  var msg = function(t, ruim){ el("avMsg").textContent = t; el("avMsg").style.color = ruim ? "var(--crit)" : "var(--good)"; };
+  function pedir(corpo){
+    return fetch(String(SERVIDOR.url).replace(/\/+$/, "") + "/functions/v1/chamados", {
+      method: "POST", headers: {"apikey": SERVIDOR.chave, "Content-Type": "application/json"}, body: JSON.stringify(corpo)
+    }).then(function(r){
+      return r.json().then(function(j){ return {st: r.status, j: j || {}}; }, function(){ return {st: r.status, j: {}}; });
+    });
+  }
+  if(!token || !SERVIDOR.url){ el("avSobre").textContent = "Este link de avaliação está incompleto. Peça outro à TI."; return; }
+  pedir({acao: "avaliar.ver", token: token}).then(function(r){
+    if(r.st !== 200){ el("avSobre").textContent = r.j.erro || "Não consegui abrir esta avaliação."; return; }
+    el("avSobre").textContent = "Chamado #" + r.j.chamado + (r.j.titulo ? " — " + r.j.titulo : "") + ".";
+    if(r.j.respondida){ msg("Esta avaliação já foi respondida" + (r.j.nota ? " (nota " + r.j.nota + ")" : "") + ". Obrigado!"); return; }
+    el("avForm").hidden = false;
+  }, function(){ el("avSobre").textContent = "Sem conexão agora. Tente de novo daqui a pouco."; });
+  el("avNotas").addEventListener("click", function(e){
+    var b = e.target.closest ? e.target.closest("button[data-n]") : null;
+    if(!b) return;
+    nota = Number(b.getAttribute("data-n"));
+    Array.prototype.forEach.call(el("avNotas").querySelectorAll("button"), function(x){
+      x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b ? "true" : "false");
+    });
+    el("avEnviar").disabled = false;
+  });
+  el("avEnviar").addEventListener("click", function(){
+    if(!nota) return;
+    el("avEnviar").disabled = true;
+    pedir({acao: "avaliar.responder", token: token, nota: nota, comentario: el("avComent").value}).then(function(r){
+      if(r.st === 200){ el("avForm").hidden = true; msg("Obrigado! Sua avaliação foi enviada."); return; }
+      msg(r.j.erro || "Não consegui enviar. Tente de novo.", r.st !== 409);
+      if(r.st === 409) el("avForm").hidden = true; else el("avEnviar").disabled = false;
+    }, function(){ msg("Sem conexão agora. Tente de novo daqui a pouco.", true); el("avEnviar").disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
