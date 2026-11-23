@@ -248,3 +248,127 @@ function capLerCompartilhado(){
 }
 capLerCompartilhado();
 renderFila();
+
+/* ---------- 6. botão no WhatsApp Web (v37) ----------
+   O WhatsApp só exporta conversa pelo celular, uma por vez. No computador, um
+   favorito do Chrome faz o papel: com a conversa aberta no web.whatsapp.com, um
+   clique lê as mensagens que estão carregadas na tela (as suas ficam de fora),
+   e entrega aqui pela janela do Chamados TI; se a entrega direta não der certo,
+   copia, e colar na Captura lê sozinho. Não envia mensagem, não abre conversa
+   nem rola a tela por você: é um clique seu, numa conversa que você abriu.
+   O texto vai do seu navegador para o seu navegador; nada passa por servidor. */
+var CAP_WA = "https://web.whatsapp.com", CAP_WA_CAB = "[Chamados TI] conversa: ";
+var capWaVistos = {};
+function capWaReceber(conversa, texto){
+  var novos = candidatosDe(texto, conversa || "WhatsApp Web");
+  var antes = impCandidatos.length;
+  if(novos.length){ adicionarCandidatos(novos, conversa || "WhatsApp Web"); pintarLidos(); pintarImport(); }
+  var entraram = impCandidatos.length - antes;
+  var pedidos = novos.filter(function(c){ return !c.motivo; }).length;
+  var aba = document.querySelector('nav.tabs button[data-tab="captura"]'); if(aba) aba.click();
+  var ci = $("cardImportar"); if(ci && ci.scrollIntoView) ci.scrollIntoView({block: "start"});
+  toast(novos.length ? conversa + ": " + pedidos + (pedidos === 1 ? " pedido" : " pedidos") +
+    (entraram < novos.length ? " (" + (novos.length - entraram) + " já estavam na lista)" : "") + ". Confira e mande para a fila."
+    : "Nada reconhecido na conversa " + conversa + ".");
+  return pedidos;
+}
+window.addEventListener("message", function(e){
+  if(e.origin !== CAP_WA) return;
+  var d = e.data;
+  if(!d || d.tipo !== "ctip-wa" || typeof d.texto !== "string" || !d.id) return;
+  if(!capWaVistos[d.id]) capWaVistos[d.id] = {n: capWaReceber(String(d.conversa || "").slice(0, 80), d.texto.slice(0, 2000000))};
+  try{ e.source.postMessage({tipo: "ctip-wa-ok", id: d.id, n: capWaVistos[d.id].n}, CAP_WA); }catch(x){}
+});
+/* colado do botão (quando a entrega direta não deu): a 1ª linha traz o nome */
+if($("impTexto")) $("impTexto").addEventListener("paste", function(e){
+  var t = e.clipboardData ? e.clipboardData.getData("text") : "";
+  if(t.indexOf(CAP_WA_CAB) !== 0) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  var quebra = t.indexOf("\n");
+  capWaReceber(t.slice(CAP_WA_CAB.length, quebra < 0 ? t.length : quebra).trim(), quebra < 0 ? "" : t.slice(quebra + 1));
+}, true);
+
+/* o que roda dentro do WhatsApp Web quando o favorito é clicado */
+function capWaBotao(){
+  var A = "__ORIGEM__", CAB = "__CAB__";
+  var aviso = function(s){
+    var d = document.createElement("div"); d.textContent = s;
+    d.style.cssText = "position:fixed;z-index:2147483647;top:18px;left:50%;transform:translateX(-50%);max-width:520px;" +
+      "background:#16191C;color:#fff;padding:12px 18px;border-radius:10px;border-left:4px solid #F25B20;font:14px/1.4 sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.35)";
+    document.body.appendChild(d); setTimeout(function(){ d.remove(); }, 6000);
+  };
+  if(location.origin !== "https://web.whatsapp.com"){ aviso("Este botão funciona no web.whatsapp.com, com uma conversa aberta."); return; }
+  var main = document.getElementById("main");
+  if(!main){ aviso("Abra uma conversa (ou um grupo) no WhatsApp Web e clique de novo."); return; }
+  var tit = main.querySelector("header span[title]") || main.querySelector("header span[dir=auto]");
+  var conv = ((tit && (tit.getAttribute("title") || tit.textContent)) || "WhatsApp Web").trim().slice(0, 80);
+  var linhas = [], n = 0;
+  Array.prototype.forEach.call(main.querySelectorAll("[data-pre-plain-text]"), function(el){
+    if(el.closest(".message-out")) return;
+    var m = /^\s*\[(\d{1,2}):(\d{2})(?::\d{2})?,\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\]\s*(.+?):\s*$/.exec(el.getAttribute("data-pre-plain-text") || "");
+    if(!m) return;
+    var corpo = el.querySelector(".selectable-text") || el;
+    var t = String(corpo.innerText || "").trim();
+    if(!t) return;
+    linhas.push(m[3] + "/" + m[4] + "/" + m[5] + " " + m[1] + ":" + m[2] + " - " + m[6] + ": " + t);
+    n++;
+  });
+  if(!n){ aviso("Não achei mensagens de outras pessoas carregadas nesta conversa. Role para cima até onde quer capturar e clique de novo."); return; }
+  var texto = linhas.join("\n"), id = String(Date.now()), ok = false, k = 0;
+  var copiar = function(){
+    var s = CAB + conv + "\n" + texto;
+    try{ navigator.clipboard.writeText(s); }catch(x){
+      try{ var ta = document.createElement("textarea"); ta.value = s; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }catch(y){}
+    }
+  };
+  copiar();
+  var w = null;
+  try{
+    w = window.open("", "chamadosTI");
+    var nova = false;
+    try{ nova = !w.location.href || w.location.href === "about:blank"; }catch(x){ nova = false; }
+    if(nova) w.location.href = A + "/#captura";
+  }catch(x){ w = null; }
+  window.addEventListener("message", function(e){
+    if(e.origin === A && e.data && e.data.tipo === "ctip-wa-ok" && e.data.id === id && !ok){
+      ok = true; aviso(conv + ": " + e.data.n + " pedido(s) na Captura do Chamados TI.");
+    }
+  });
+  aviso(n + " mensagens lidas de " + conv + ". Entregando ao Chamados TI…");
+  var iv = setInterval(function(){
+    if(ok){ clearInterval(iv); return; }
+    if(++k > 40 || !w || w.closed){
+      clearInterval(iv);
+      aviso("Copiei as mensagens de " + conv + ". Na Captura do Chamados TI, clique na caixa de texto e cole (Ctrl+V).");
+      return;
+    }
+    try{ w.postMessage({tipo: "ctip-wa", id: id, conversa: conv, texto: texto}, A); }catch(x){}
+  }, 500);
+}
+function capWaLink(){
+  var src = String(capWaBotao).replace("__ORIGEM__", location.origin).replace("__CAB__", CAP_WA_CAB);
+  return "javascript:(" + encodeURIComponent(src) + ")();";
+}
+(function(){
+  var ci = $("cardImportar"); if(!ci || !/^https?:$/.test(location.protocol)) return;
+  var d = document.createElement("div");
+  d.id = "capWa"; d.className = "cap-wa";
+  d.innerHTML = '<div class="cap-wa-topo"><b>No computador: botão no WhatsApp Web</b>' +
+    '<a class="cap-wa-btn" id="capWaLink" href="#" title="Arraste para a barra de favoritos do Chrome">Mandar para o Chamados TI</a></div>' +
+    '<ol class="hint" style="margin:6px 0 0;padding-left:18px">' +
+      "<li><b>Arraste</b> o botão laranja para a barra de favoritos do Chrome (Ctrl+Shift+B mostra a barra). Uma vez só.</li>" +
+      "<li>No <b>web.whatsapp.com</b>, abra o grupo ou a conversa e role até onde quer capturar.</li>" +
+      "<li>Clique no favorito. Os pedidos aparecem aqui, separados e classificados. Repita em cada grupo: a lista vai somando.</li></ol>" +
+    '<div class="hint" style="margin-top:4px">Suas próprias mensagens ficam de fora. O texto vai do WhatsApp Web direto para esta aba, sem passar por servidor.</div>';
+  ci.insertBefore(d, ci.querySelector("h3").nextSibling);
+  var a = $("capWaLink");
+  a.setAttribute("href", capWaLink());
+  a.addEventListener("click", function(e){ e.preventDefault(); toast("Arraste este botão para a barra de favoritos; o clique vale lá, no WhatsApp Web."); });
+  var s = document.createElement("style");
+  s.textContent = ".cap-wa{border:1px dashed var(--line);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:var(--surface-2)}" +
+    ".cap-wa-topo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between}" +
+    ".cap-wa-btn{display:inline-block;background:var(--laranja);color:#fff!important;text-decoration:none;font-weight:600;font-size:.82rem;padding:7px 14px;border-radius:8px;cursor:grab}";
+  document.head.appendChild(s);
+  /* a aba do Chamados TI tem nome fixo: o botão reaproveita a mesma aba */
+  try{ if(!window.name) window.name = "chamadosTI"; }catch(x){}
+})();
