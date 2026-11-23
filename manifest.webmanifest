@@ -13,6 +13,16 @@
     {"src": "icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
     {"src": "icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable"}
   ],
+  "share_target": {
+    "action": "./compartilhar",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "titulo",
+      "text": "texto",
+      "files": [{"name": "arquivos", "accept": ["text/plain", ".txt", "application/zip", ".zip"]}]
+    }
+  },
   "shortcuts": [
     {"name": "Captura rápida", "url": "./#captura"},
     {"name": "Painel", "url": "./#painel"},
