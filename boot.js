@@ -39,6 +39,14 @@ $("capQuem").focus();
   document.body.appendChild(s);
 })();
 
+/* v34: aba Parque mais limpa: ações da linha num menu, cartões que minimizam e
+   a visão Kanban do inventário (ver parque.js). Espera o mais.js sozinho. */
+(function(){
+  var s = document.createElement("script");
+  s.src = "parque.js";
+  document.body.appendChild(s);
+})();
+
 /* com servidor de acesso configurado, a tela de entrar vem antes de tudo. A
    página fica escondida até ela decidir o que mostrar. */
 if(SERVIDOR.url){
