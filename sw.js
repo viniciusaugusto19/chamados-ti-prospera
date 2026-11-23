@@ -13,7 +13,7 @@
    Chamada a outro endereço, e qualquer POST, passam direto, sem cópia. */
 
 var CACHE = "chamados-ti-1";
-var ARQUIVOS = ["./", "estilo.css", "manifest.webmanifest", "icone.svg",
+var ARQUIVOS = ["./", "estilo.css", "tema.css", "manifest.webmanifest", "icone.svg",
   "config.js", "util.js", "bitrix.js", "painel.js", "dash.js", "etiquetas.js", "kanban.js", "relatorio.js",
   "importar.js", "doc.js", "tarefas.js", "parecidos.js", "diagnostico.js", "cronometro.js",
   "app.js", "modelos.js", "boot.js", "instalar.js", "extras.js", "inventario.js", "qr.js", "mais.js", "servico.js", "parque.js", "captura.js", "acesso.js", "avaliar.html"];
