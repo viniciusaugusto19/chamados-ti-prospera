@@ -16,7 +16,7 @@ var CACHE = "chamados-ti-1";
 var ARQUIVOS = ["./", "estilo.css", "manifest.webmanifest", "icone.svg",
   "config.js", "util.js", "bitrix.js", "painel.js", "dash.js", "etiquetas.js", "kanban.js", "relatorio.js",
   "importar.js", "doc.js", "tarefas.js", "parecidos.js", "diagnostico.js", "cronometro.js",
-  "app.js", "modelos.js", "boot.js", "instalar.js", "extras.js", "inventario.js", "qr.js", "mais.js", "servico.js", "acesso.js", "avaliar.html"];
+  "app.js", "modelos.js", "boot.js", "instalar.js", "extras.js", "inventario.js", "qr.js", "mais.js", "servico.js", "parque.js", "acesso.js", "avaliar.html"];
 
 self.addEventListener("install", function(e){
   /* um arquivo que falhe não impede os outros: a cópia se completa no uso */
