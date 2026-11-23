@@ -1,4 +1,31 @@
 "use strict";
+/* v36: tema renovado (fonte, ícones, menu lateral, tela larga) por cima do
+   estilo.css; tirar estas linhas volta ao visual anterior (ver tema.css) */
+(function(){
+  var l = document.createElement("link");
+  l.rel = "stylesheet"; l.href = "tema.css";
+  document.head.appendChild(l);
+  /* menu lateral recolhido em ícones, lembrado neste navegador */
+  var curto = load("ctip.menu", "") === "curto";
+  if(curto) document.documentElement.setAttribute("data-menu", "curto");
+  var bt = document.createElement("button");
+  bt.className = "ghost"; bt.id = "btnMenu"; bt.type = "button";
+  var pinta = function(){
+    var c = document.documentElement.getAttribute("data-menu") === "curto";
+    bt.textContent = c ? "Expandir menu" : "Recolher menu";
+    bt.title = c ? "Mostrar os nomes das abas" : "Deixar só os ícones e ganhar espaço";
+  };
+  pinta();
+  $("btnTema").parentNode.insertBefore(bt, $("btnTema"));
+  bt.addEventListener("click", function(){
+    var c = document.documentElement.getAttribute("data-menu") === "curto";
+    if(c) document.documentElement.removeAttribute("data-menu"); else document.documentElement.setAttribute("data-menu", "curto");
+    save("ctip.menu", c ? "" : "curto"); pinta();
+  });
+  /* no menu recolhido, o nome da aba aparece ao passar o mouse */
+  Array.prototype.forEach.call(document.querySelectorAll("nav.tabs button"), function(b){ if(!b.title) b.title = b.textContent.replace(/\d+$/, "").trim(); });
+})();
+
 /* ---------------- início ---------------- */
 montarSelectsLote();   /* antes do renderFila: a fila desenha os seletores dela */
 montarSelectsAplicar();
