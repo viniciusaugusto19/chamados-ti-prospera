@@ -47,6 +47,15 @@ $("capQuem").focus();
   document.body.appendChild(s);
 })();
 
+/* v35: Captura com menos trabalho manual: classificação sugerida, canal
+   WhatsApp, vários de uma vez e conversa recebida pelo compartilhar do celular
+   (ver captura.js). Usa o app.js e o importar.js, que já carregaram. */
+(function(){
+  var s = document.createElement("script");
+  s.src = "captura.js";
+  document.body.appendChild(s);
+})();
+
 /* com servidor de acesso configurado, a tela de entrar vem antes de tudo. A
    página fica escondida até ela decidir o que mostrar. */
 if(SERVIDOR.url){
