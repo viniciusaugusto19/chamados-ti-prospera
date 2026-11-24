@@ -80,6 +80,14 @@ $("capQuem").focus();
 (function(){
   var s = document.createElement("script");
   s.src = "captura.js";
+  /* v43: solicitante escolhido entre os colaboradores do Bitrix e encerrar
+     voltando ao painel (ver solicitante.js). Vem depois do captura.js, que ele
+     embrulha por fora. */
+  s.onload = s.onerror = function(){
+    var t = document.createElement("script");
+    t.src = "solicitante.js";
+    document.body.appendChild(t);
+  };
   document.body.appendChild(s);
 })();
 
