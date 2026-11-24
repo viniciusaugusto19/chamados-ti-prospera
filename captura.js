@@ -442,18 +442,18 @@ function capIaStatusTexto(t, ruim){
 }
 function capIaPintarBotao(){
   var b = $("capIaBtn"); if(!b) return;
-  /* sem a chave (a IA é paga), o botão nem aparece */
+  /* sem a IA ligada no servidor, o botão nem aparece */
   b.hidden = !SERVIDOR.url || !capIa.ligada;
   b.disabled = capIa.rodando > 0;
   b.textContent = capIa.rodando ? "IA lendo…" : "Interpretar com IA";
-  b.title = capIa.ligada ? "O Claude lê a conversa inteira e devolve os pedidos já entendidos"
-                         : "A IA ainda não está ligada no servidor (falta a chave da Anthropic)";
+  b.title = capIa.ligada ? "A IA lê a conversa inteira e devolve os pedidos já entendidos"
+                         : "A IA ainda não está ligada no servidor";
 }
 function capIaConferir(){
   if(capIa.conferido || !SERVIDOR.url || typeof acPedir !== "function" || typeof acEu === "undefined" || !acEu) return;
   capIa.conferido = true;
   acPedir({acao: "ia.status"}).then(function(j){
-    capIa.ligada = !!j.ligada; capIaPintarBotao();
+    capIa.ligada = !!j.ligada; capIaPintarBotao(); capUsoPintar(j.uso);
     /* o que chegou do WhatsApp Web antes de saber se a IA estava ligada */
     var pend = Object.keys(CAP_AUTO).filter(function(c){ return !CAP_IA_FEITO[c]; });
     if(capIa.ligada && pend.length) capIaInterpretar(pend);
@@ -468,7 +468,7 @@ function capIaConferir(){
 
 function capIaInterpretar(conversas){
   if(!capIa.ligada){
-    toast("A IA ainda não está ligada: falta cadastrar a chave da Anthropic no servidor (ANTHROPIC_API_KEY).");
+    toast("A IA ainda não está ligada: falta cadastrar o acesso da Cloudflare (CF_ACCOUNT_ID e CF_API_TOKEN) no servidor.");
     return;
   }
   var lista = (conversas || Object.keys(CAP_TXT)).filter(function(c){ return CAP_TXT[c] && String(CAP_TXT[c]).trim(); });
@@ -492,12 +492,14 @@ function capIaInterpretar(conversas){
       impCandidatos = impCandidatos.filter(function(c){ return c.conversa !== conv; }).concat(novos);
       impCandidatos.sort(function(a, b){ return (a.quando || 0) - (b.quando || 0); });
       CAP_IA_FEITO[conv] = CAP_TXT[conv].length;
+      if(j.uso) capUsoPintar(j.uso);
       pintarImport();
       var abertos = novos.filter(function(c){ return c.ia.situacao !== "resolvido"; }).length;
       toast("IA: " + novos.length + (novos.length === 1 ? " pedido" : " pedidos") + " em “" + conv + "”" +
         (novos.length ? " (" + abertos + " em aberto, " + (novos.length - abertos) + " já resolvidos na conversa)." : "."));
     }, function(e){
       toast("A IA não conseguiu ler “" + conv + "”: " + e.message + " A lista das regras continua valendo.");
+      capUsoAtualizar();
     }).then(function(){
       capIa.rodando--; capIaPintarBotao();
       if(!capIa.rodando) capIaStatusTexto("");
@@ -661,3 +663,63 @@ var capCandCtx = candidatosDe;
 candidatosDe = function(txt, conversa){
   return capContexto(capCandCtx.apply(this, arguments), conversa);
 };
+
+/* ---------- 9. contador da IA grátis (v41) ----------
+   A cota grátis da Cloudflare é uma só para o painel inteiro e zera à
+   meia-noite UTC (21h em Brasília). O servidor anota o gasto de cada leitura
+   (tabela ia_uso, sem o texto da conversa) e devolve o total do dia e quem
+   gastou quanto; aqui vira uma barra no cartão do WhatsApp. É estimativa pela
+   tabela de preços da Cloudflare: o número oficial fica no painel dela. */
+var CAP_LEITURA_MEDIA = 350;
+function capUsoZera(){
+  var a = new Date(), z = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate() + 1));
+  return ("0" + z.getHours()).slice(-2) + "h" + (z.getMinutes() ? ("0" + z.getMinutes()).slice(-2) : "");
+}
+function capUsoPintar(u){
+  var el = $("capIaUso"); if(!el) return;
+  if(!u || !capIa.ligada){ el.hidden = true; return; }
+  el.hidden = false;
+  var pct = Math.min(100, Math.round(u.usado / u.cota * 100));
+  var leituras = u.pessoas.reduce(function(t, p){ return t + p.leituras; }, 0);
+  var media = leituras ? Math.max(80, u.usado / leituras) : CAP_LEITURA_MEDIA;
+  var sobra = Math.max(0, Math.floor((u.cota - u.usado) / media));
+  var cls = u.esgotou || pct >= 85 ? "crit" : (pct >= 60 ? "warn" : "ok");
+  var n = function(x){ return Number(x).toLocaleString("pt-BR"); };
+  el.innerHTML = '<div class="cap-uso-topo"><b>IA grátis hoje</b><span>' +
+      (u.esgotou ? '<b style="color:var(--crit)">a cota acabou</b>' : n(u.usado) + " de " + n(u.cota) + " (" + pct + "%)") +
+      " · zera às " + capUsoZera() + "</span></div>" +
+    '<div class="cap-uso-barra"><span class="' + cls + '" style="width:' + (u.esgotou ? 100 : pct) + '%"></span></div>' +
+    '<div class="hint" style="margin:4px 0 0">' +
+      (u.esgotou ? "A Cloudflare recusou por falta de cota. Até zerar, a Captura separa os pedidos pelas regras. Nada é cobrado."
+                 : "Dá para mais ~" + sobra + (sobra === 1 ? " leitura" : " leituras") + " hoje, somando todo mundo" +
+                   (leituras ? " (média de hoje: " + n(Math.round(media)) + " por leitura)." : " (estimativa de uma conversa média).") +
+                   " Role só até a última captura para gastar menos.") + "</div>" +
+    (u.pessoas.length ? '<div class="cap-uso-gente">' + u.pessoas.map(function(p){
+      return '<span class="tag neutral">' + esc(String(p.nome).split(" ")[0]) + (p.eu ? " (você)" : "") + ": " + n(p.neurons) +
+        " · " + p.leituras + (p.leituras === 1 ? " leitura" : " leituras") + "</span>";
+    }).join("") + "</div>" : "");
+}
+function capUsoAtualizar(){
+  if(!capIa.ligada || typeof acPedir !== "function") return;
+  acPedir({acao: "ia.status"}).then(function(j){ capUsoPintar(j.uso); }, function(){});
+}
+(function(){
+  var ci = $("cardImportar"); if(!ci) return;
+  var d = document.createElement("div");
+  d.id = "capIaUso"; d.className = "cap-uso"; d.hidden = true;
+  var wa = $("capWa");
+  ci.insertBefore(d, wa ? wa.nextSibling : ci.querySelector("h3").nextSibling);
+  var s = document.createElement("style");
+  s.textContent = ".cap-uso{border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:0 0 12px;background:var(--surface)}" +
+    ".cap-uso[hidden]{display:none}" +
+    ".cap-uso-topo{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.82rem}" +
+    ".cap-uso-topo span{color:var(--muted)}" +
+    ".cap-uso-barra{height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:6px}" +
+    ".cap-uso-barra span{display:block;height:100%;border-radius:4px}" +
+    ".cap-uso-barra .ok{background:var(--good)} .cap-uso-barra .warn{background:var(--warn)} .cap-uso-barra .crit{background:var(--crit)}" +
+    ".cap-uso-gente{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}" +
+    ".cap-uso-gente .tag{font-size:.7rem}";
+  document.head.appendChild(s);
+  /* o colega também gasta: a barra se atualiza a cada 5 minutos */
+  setInterval(function(){ if(!document.hidden) capUsoAtualizar(); }, 300000);
+})();
