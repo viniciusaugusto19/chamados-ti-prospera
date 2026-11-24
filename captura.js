@@ -442,7 +442,8 @@ function capIaStatusTexto(t, ruim){
 }
 function capIaPintarBotao(){
   var b = $("capIaBtn"); if(!b) return;
-  b.hidden = !SERVIDOR.url;
+  /* sem a chave (a IA é paga), o botão nem aparece */
+  b.hidden = !SERVIDOR.url || !capIa.ligada;
   b.disabled = capIa.rodando > 0;
   b.textContent = capIa.rodando ? "IA lendo…" : "Interpretar com IA";
   b.title = capIa.ligada ? "O Claude lê a conversa inteira e devolve os pedidos já entendidos"
@@ -520,8 +521,8 @@ pintarImport = function(){
     d.innerHTML = '<span class="tag ' + sit[0] + '">' + esc(sit[1]) + "</span>" +
       (cls ? '<span class="tag neutral">' + esc(cls) + "</span>" : "") +
       (p.prioridade ? '<span class="tag neutral">' + esc(p.prioridade) + "</span>" : "") +
-      '<span class="cap-ia-ia">IA</span>' +
-      (p.descricao ? '<div class="cap-ia-d">' + esc(p.descricao) + (p.resolucao ? " <b>Feito:</b> " + esc(p.resolucao) : "") + "</div>" : "");
+      (p.fonte === "regras" ? "" : '<span class="cap-ia-ia">IA</span>') +
+      ((p.descricao || p.resolucao) ? '<div class="cap-ia-d">' + esc(p.descricao || "") + (p.resolucao ? (p.descricao ? " " : "") + "<b>Feito:</b> " + esc(p.resolucao) : "") + "</div>" : "");
     alvo.appendChild(d);
   });
 };
@@ -531,12 +532,20 @@ pintarImport = function(){
 var capIaLevando = [];
 if($("impMandar")) $("impMandar").addEventListener("click", function(){
   capIaLevando = impCandidatos.filter(function(c){ return c.marcada && c.ia; })
-    .map(function(c){ return {quem: c.quem, texto: c.texto, ia: c.ia, conversa: c.conversa}; });
+    .map(function(c){ return {quem: c.quem, texto: c.texto, ia: c.ia, conversa: c.conversa, original: c.original}; });
   setTimeout(function(){
     var mexeu = 0;
     capIaLevando.forEach(function(x){
       var it = fila.filter(function(f){ return !f.chamado && !f.ia && f.oque === x.texto && f.quem === x.quem; })[0];
       if(!it) return;
+      if(x.ia.fonte === "regras"){
+        /* leitor de regras: a classificação fica com a sugestão pelo histórico */
+        it.detalhe = [x.original || x.texto, x.ia.resolucao ? "Resolvido na conversa: " + x.ia.resolucao : "",
+                      x.ia.resposta ? "TI respondeu na conversa: " + x.ia.resposta : "",
+                      "Origem: WhatsApp, " + x.conversa + "."].filter(Boolean).join("\n\n");
+        mexeu++;
+        return;
+      }
       it.ia = true; it.sugFeito = true; it.sug = [];
       CLS_LINHA.forEach(function(f){ var id = capIdDe(f, x.ia[f]); if(id){ it[f] = id; it.sug.push(f); } });
       it.detalhe = [x.ia.descricao, x.ia.resolucao ? "Resolvido na conversa: " + x.ia.resolucao : "",
@@ -573,3 +582,82 @@ camposDaAnotacao = function(item){
   document.head.appendChild(s);
   capIaPintarBotao();
 })();
+
+/* ---------- 8. leitor com contexto, sem IA (v39) ----------
+   Gratuito e dentro do navegador. Em vez de olhar mensagem por mensagem, lê a
+   conversa em ordem:
+   - resposta da TI depois de um pedido diz o andamento dele: "feito",
+     "liberei", "já está com acesso" = resolvido na conversa; outra resposta =
+     TI já respondeu; nenhuma = sem resposta da TI;
+   - a TI anunciando um trabalho feito sem pedido antes ("já fiz a virada do
+     e-mail do DP") vira um item próprio, porque também precisa de registro;
+   - o título sai limpo (sem "bom dia, pessoal", sem @menção, primeira letra
+     maiúscula, cortado na palavra) e o texto inteiro vai para Detalhes. */
+var CAP_RE_FEITO = /\b(feito|feita|resolvid[oa]|pront[oa]|liberad[oa]|liberei|conclu[ií]d[oa]|conclu[ií]|fiz|configurei|instalei|criei|ajustei|corrigi|resolvi|troquei|atualizei|resetei|desbloqueei|desbloquead[oa]|habilitei|cadastrei|enviei|mandei|j[aá] (est[aá]|foi|tem|consegue|funciona)|est[aá] com acesso|com acesso|j[aá] pode|pode testar|funcionando)\b/i;
+var CAP_RE_ANUNCIO = /\b(fiz|configurei|instalei|criei|ajustei|corrigi|resolvi|troquei|atualizei|resetei|desbloqueei|habilitei|cadastrei|liberei|virada|migrei|est[aá] com acesso|com acesso)\b/i;
+var CAP_RE_SAUDACAO = /^(\s*(bom dia|boa tarde|boa noite|oi+|ol[aá]|pessoal|galera|gente|time|ti|suporte|por favor|pf|pfv|pfvr|@\S+)[\s,!.:;-]*)+/i;
+function capTitulo(t){
+  var x = String(t || "").replace(/\s+/g, " ").replace(CAP_RE_SAUDACAO, "").trim();
+  if(!x) x = String(t || "").trim();
+  x = x.charAt(0).toUpperCase() + x.slice(1);
+  if(x.length > 90){ x = x.slice(0, 90); var sp = x.lastIndexOf(" "); if(sp > 50) x = x.slice(0, sp); x = x.replace(/[\s,;:.-]+$/, "") + "…"; }
+  return x;
+}
+/* palavras que dizem o assunto (fora as que aparecem em qualquer resposta) */
+var CAP_GENERICAS = {};
+("feito feita pronto pronta resolvido resolvida liberado liberada liberei acesso acessos conseguir consegue funciona funcionando " +
+ "testar teste tbm tambem copia agora ja sim nao mais vou olhar ver verificar fiz fizemos com sem para").split(" ").forEach(function(w){ CAP_GENERICAS[w] = 1; });
+function capPalavrasAssunto(t){
+  return capPalavras(t).filter(function(w){ return w.length >= 4 && !CAP_GENERICAS[w]; });
+}
+function capEhTI(c){ return c.motivo === "mensagem sua (TI)" || c.motivo === "remetente ignorado"; }
+function capContexto(r, conversa){
+  var ordem = r.slice().sort(function(a, b){ return (a.quando || 0) - (b.quando || 0); });
+  var novos = [];
+  ordem.forEach(function(c){
+    if(capEhTI(c)){
+      var texto = String(c.texto || "").trim();
+      /* a qual pedido essa resposta se refere: o mais recente, ainda não
+         resolvido, que fale do mesmo assunto (palavra em comum). Resposta curta
+         e genérica ("feito", "pronto, liberado") vale para o pedido de até 4 h
+         antes; com duas palavras em comum, até 3 dias. */
+      var alvo = null, pt = capPalavrasAssunto(texto);
+      var curta = texto.length <= 30 && CAP_RE_FEITO.test(texto) && !pt.length;
+      ordem.forEach(function(p){
+        if(!p.ia || p.ia.fonte !== "regras" || p.ia.situacao === "resolvido") return;
+        if(!p.quando || !c.quando || c.quando < p.quando) return;
+        var gap = c.quando - p.quando, pp = capPalavrasAssunto(p.original || p.texto);
+        var comum = pt.filter(function(w){ return pp.indexOf(w) !== -1; }).length;
+        if((gap <= 4 * 3600000 && (comum >= 1 || curta)) || (gap <= 3 * 86400000 && comum >= 2)) alvo = p;
+      });
+      var feito = CAP_RE_FEITO.test(texto);
+      if(alvo){
+        if(feito){ alvo.ia.situacao = "resolvido"; alvo.ia.resolucao = texto; alvo.ia.resposta = ""; }
+        else if(alvo.ia.situacao === "aberto"){ alvo.ia.situacao = "em_andamento"; alvo.ia.resposta = texto; }
+      } else if(texto.length >= 15 && CAP_RE_ANUNCIO.test(texto) && !/\?\s*$/.test(texto)){
+        var n = {quem: conversa || "WhatsApp", texto: capTitulo(texto), original: texto, quando: c.quando, conversa: conversa,
+                 marcada: true, motivo: "", ia: {fonte: "regras", situacao: "resolvido", resolucao: texto, descricao: "Atendimento feito pela TI, anunciado na conversa."}};
+        novos.push(n);
+      }
+      return;
+    }
+    if(c.motivo) return;
+    c.original = c.texto;
+    c.texto = capTitulo(c.texto);
+    /* o texto inteiro só aparece embaixo quando o título cortou ou limpou algo */
+    var igual = String(c.texto).toLowerCase() === String(c.original).replace(/\s+/g, " ").trim().toLowerCase();
+    c.ia = {fonte: "regras", situacao: "aberto", resolucao: "", resposta: "", descricao: igual ? "" : c.original};
+  });
+  ordem.concat(novos).forEach(function(c){
+    if(c.ia && c.ia.fonte === "regras" && !c.motivo &&
+       fila.some(function(it){ return it.oque === c.texto && it.quem === c.quem; })){ c.marcada = false; c.motivo = "já está na fila"; }
+  });
+  ordem.forEach(function(c){
+    if(c.ia && c.ia.fonte === "regras" && c.ia.situacao === "em_andamento") c.ia.descricao = (c.ia.descricao ? c.ia.descricao + " · " : "") + "TI respondeu: " + c.ia.resposta;
+  });
+  return r.concat(novos);
+}
+var capCandCtx = candidatosDe;
+candidatosDe = function(txt, conversa){
+  return capContexto(capCandCtx.apply(this, arguments), conversa);
+};
