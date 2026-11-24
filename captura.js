@@ -122,14 +122,14 @@ function capMarcarSugeridos(){
     total++;
     it.sug.forEach(function(f){
       var s = document.querySelector('#fila select[data-cls="' + f + '"][data-i="' + i + '"]');
-      if(s){ s.classList.add("cap-sug"); s.title = "Sugerido pelos chamados parecidos. Confira."; }
+      if(s){ s.classList.add("cap-sug"); s.title = it.ia ? "Escolhido pela IA lendo a conversa. Confira." : "Sugerido pelos chamados parecidos. Confira."; }
     });
   });
   var av = $("capSugAviso");
   if(av){
     av.hidden = !total;
     av.textContent = total ? total + (total === 1 ? " anotação veio" : " anotações vieram") +
-      " com classificação sugerida (em destaque), tirada dos chamados parecidos já feitos. Confira antes de criar." : "";
+      " com classificação sugerida (em destaque), pela IA ou pelos chamados parecidos já feitos. Confira antes de criar." : "";
   }
 }
 (function(){
@@ -259,7 +259,11 @@ renderFila();
    O texto vai do seu navegador para o seu navegador; nada passa por servidor. */
 var CAP_WA = "https://web.whatsapp.com", CAP_WA_CAB = "[Chamados TI] conversa: ";
 var capWaVistos = {};
-function capWaReceber(conversa, texto){
+function capWaReceber(conversa, texto, versao){
+  if(versao === 1 && !capWaReceber.avisou){
+    capWaReceber.avisou = true;
+    setTimeout(function(){ toast("Seu botão do WhatsApp Web é da versão antiga. Arraste o botão laranja para os favoritos de novo (e apague o antigo)."); }, 2800);
+  }
   var novos = candidatosDe(texto, conversa || "WhatsApp Web");
   var antes = impCandidatos.length;
   if(novos.length){ adicionarCandidatos(novos, conversa || "WhatsApp Web"); pintarLidos(); pintarImport(); }
@@ -267,7 +271,10 @@ function capWaReceber(conversa, texto){
   var pedidos = novos.filter(function(c){ return !c.motivo; }).length;
   var aba = document.querySelector('nav.tabs button[data-tab="captura"]'); if(aba) aba.click();
   var ci = $("cardImportar"); if(ci && ci.scrollIntoView) ci.scrollIntoView({block: "start"});
-  toast(novos.length ? conversa + ": " + pedidos + (pedidos === 1 ? " pedido" : " pedidos") +
+  if(novos.length) CAP_AUTO[conversa || "WhatsApp Web"] = 1;
+  if(novos.length && capIa.ligada) capIaInterpretar([conversa || "WhatsApp Web"]);
+  else if(novos.length && !capIa.conferido && SERVIDOR.url) toast("Conversa recebida. A IA lê assim que a conexão com o servidor terminar…");
+  else toast(novos.length ? conversa + ": " + pedidos + (pedidos === 1 ? " pedido" : " pedidos") +
     (entraram < novos.length ? " (" + (novos.length - entraram) + " já estavam na lista)" : "") + ". Confira e mande para a fila."
     : "Nada reconhecido na conversa " + conversa + ".");
   return pedidos;
@@ -276,7 +283,7 @@ window.addEventListener("message", function(e){
   if(e.origin !== CAP_WA) return;
   var d = e.data;
   if(!d || d.tipo !== "ctip-wa" || typeof d.texto !== "string" || !d.id) return;
-  if(!capWaVistos[d.id]) capWaVistos[d.id] = {n: capWaReceber(String(d.conversa || "").slice(0, 80), d.texto.slice(0, 2000000))};
+  if(!capWaVistos[d.id]) capWaVistos[d.id] = {n: capWaReceber(String(d.conversa || "").slice(0, 80), d.texto.slice(0, 2000000), d.v || 1)};
   try{ e.source.postMessage({tipo: "ctip-wa-ok", id: d.id, n: capWaVistos[d.id].n}, CAP_WA); }catch(x){}
 });
 /* colado do botão (quando a entrega direta não deu): a 1ª linha traz o nome */
@@ -285,7 +292,7 @@ if($("impTexto")) $("impTexto").addEventListener("paste", function(e){
   if(t.indexOf(CAP_WA_CAB) !== 0) return;
   e.preventDefault(); e.stopImmediatePropagation();
   var quebra = t.indexOf("\n");
-  capWaReceber(t.slice(CAP_WA_CAB.length, quebra < 0 ? t.length : quebra).trim(), quebra < 0 ? "" : t.slice(quebra + 1));
+  capWaReceber(t.slice(CAP_WA_CAB.length, quebra < 0 ? t.length : quebra).trim(), quebra < 0 ? "" : t.slice(quebra + 1), /\[eu\] /.test(t) ? 2 : 1);
 }, true);
 
 /* o que roda dentro do WhatsApp Web quando o favorito é clicado */
@@ -304,14 +311,15 @@ function capWaBotao(){
   var conv = ((tit && (tit.getAttribute("title") || tit.textContent)) || "WhatsApp Web").trim().slice(0, 80);
   var linhas = [], n = 0;
   Array.prototype.forEach.call(main.querySelectorAll("[data-pre-plain-text]"), function(el){
-    if(el.closest(".message-out")) return;
+    var linhaMsg = el.closest("[data-id]");
+    var minha = !!el.closest(".message-out") || !!(linhaMsg && /^true_/.test(linhaMsg.getAttribute("data-id") || ""));
     var m = /^\s*\[(\d{1,2}):(\d{2})(?::\d{2})?,\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\]\s*(.+?):\s*$/.exec(el.getAttribute("data-pre-plain-text") || "");
     if(!m) return;
     var corpo = el.querySelector(".selectable-text") || el;
     var t = String(corpo.innerText || "").trim();
     if(!t) return;
-    linhas.push(m[3] + "/" + m[4] + "/" + m[5] + " " + m[1] + ":" + m[2] + " - " + m[6] + ": " + t);
-    n++;
+    linhas.push(m[3] + "/" + m[4] + "/" + m[5] + " " + m[1] + ":" + m[2] + " - " + (minha ? "[eu] " : "") + m[6] + ": " + t);
+    if(!minha) n++;
   });
   if(!n){ aviso("Não achei mensagens de outras pessoas carregadas nesta conversa. Role para cima até onde quer capturar e clique de novo."); return; }
   var texto = linhas.join("\n"), id = String(Date.now()), ok = false, k = 0;
@@ -342,7 +350,7 @@ function capWaBotao(){
       aviso("Copiei as mensagens de " + conv + ". Na Captura do Chamados TI, clique na caixa de texto e cole (Ctrl+V).");
       return;
     }
-    try{ w.postMessage({tipo: "ctip-wa", id: id, conversa: conv, texto: texto}, A); }catch(x){}
+    try{ w.postMessage({tipo: "ctip-wa", v: 2, id: id, conversa: conv, texto: texto}, A); }catch(x){}
   }, 500);
 }
 function capWaLink(){
@@ -371,4 +379,197 @@ function capWaLink(){
   document.head.appendChild(s);
   /* a aba do Chamados TI tem nome fixo: o botão reaproveita a mesma aba */
   try{ if(!window.name) window.name = "chamadosTI"; }catch(x){}
+})();
+
+/* ---------- 7. IA lendo a conversa (v38) ----------
+   Com a chave da Anthropic ligada no servidor (segredo ANTHROPIC_API_KEY da
+   função chamados), a conversa inteira vai para o Claude, que devolve os
+   pedidos já entendidos: um item por assunto (juntando mensagens e pessoas),
+   título limpo, quem pediu, categoria, subcategoria e prioridade escolhidas
+   entre as opções do portal, e se a TI já resolveu na própria conversa. As
+   respostas da TI servem de contexto e não viram pedido. Sem a chave, fica o
+   que já existia (regras). Nada é criado sem conferir e clicar. */
+var capIa = {ligada: false, conferido: false, rodando: 0};
+var CAP_TXT = {};          /* conversa -> texto bruto, para mandar à IA */
+var CAP_IA_FEITO = {};     /* conversa -> tamanho do texto já interpretado */
+var CAP_AUTO = {};         /* conversas vindas do WhatsApp Web: a IA lê sozinha */
+
+/* suas mensagens (marcadas pelo botão do WhatsApp Web) não são pedido; e o
+   nome no WhatsApp ("Vinicius Augusto") conta como o do filtro ("Vinicius
+   Augusto Macedo Silva") */
+var capCandOrig = candidatosDe;
+candidatosDe = function(txt, conversa){
+  if(conversa) CAP_TXT[conversa] = String(txt || "");
+  var r = capCandOrig.apply(this, arguments);
+  r.forEach(function(c){
+    if(/^\[eu\] /.test(c.quem || "")){ c.quem = c.quem.slice(5); c.marcada = false; c.motivo = "mensagem sua (TI)"; }
+  });
+  return r;
+};
+var capIgnOrig = ehIgnorado;
+ehIgnorado = function(quem){
+  if(capIgnOrig.apply(this, arguments)) return true;
+  var q = semAcento(quem).split(/[^a-z]+/).filter(function(x){ return x.length > 1; });
+  if(q.length < 2) return false;
+  return nomesIgnorados().some(function(n){
+    var t = semAcento(n).split(/[^a-z]+/);
+    return q.every(function(x){ return t.indexOf(x) !== -1; });
+  });
+};
+
+function capIaRotulos(campo){
+  var m = enumRotulos[B.campo[campo]] || {};
+  return Object.keys(m).map(function(k){ return m[k]; }).filter(Boolean);
+}
+function capIaTecnicos(){
+  var l = [];
+  var eu = load(K.eu, null); if(eu && eu.nome) l.push(eu.nome);
+  if(typeof acEu !== "undefined" && acEu && acEu.nome) l.push(acEu.nome);
+  nomesIgnorados().forEach(function(n){ l.push(n); });
+  return l.filter(function(x, i){ return x && l.indexOf(x) === i; });
+}
+function capIaData(s, reserva){
+  var m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}) (\d{1,2}):(\d{2})$/.exec(String(s || ""));
+  if(!m) return reserva || new Date();
+  var a = +m[3]; if(a < 100) a += 2000;
+  var d = new Date(a, +m[2] - 1, +m[1], +m[4], +m[5]);
+  return isNaN(d.getTime()) ? (reserva || new Date()) : d;
+}
+function capIaStatusTexto(t, ruim){
+  var el = $("capIaStatus"); if(!el) return;
+  el.hidden = !t; el.textContent = t || "";
+  el.style.color = ruim ? "var(--crit)" : "";
+}
+function capIaPintarBotao(){
+  var b = $("capIaBtn"); if(!b) return;
+  b.hidden = !SERVIDOR.url;
+  b.disabled = capIa.rodando > 0;
+  b.textContent = capIa.rodando ? "IA lendo…" : "Interpretar com IA";
+  b.title = capIa.ligada ? "O Claude lê a conversa inteira e devolve os pedidos já entendidos"
+                         : "A IA ainda não está ligada no servidor (falta a chave da Anthropic)";
+}
+function capIaConferir(){
+  if(capIa.conferido || !SERVIDOR.url || typeof acPedir !== "function" || typeof acEu === "undefined" || !acEu) return;
+  capIa.conferido = true;
+  acPedir({acao: "ia.status"}).then(function(j){
+    capIa.ligada = !!j.ligada; capIaPintarBotao();
+    /* o que chegou do WhatsApp Web antes de saber se a IA estava ligada */
+    var pend = Object.keys(CAP_AUTO).filter(function(c){ return !CAP_IA_FEITO[c]; });
+    if(capIa.ligada && pend.length) capIaInterpretar(pend);
+  }, function(e){
+    /* servidor antigo (sem a IA) responde 400: fica desligada. Falha de rede
+       tenta de novo mais tarde, poucas vezes. */
+    capIa.ligada = false; capIaPintarBotao();
+    if(!e || !e.status){ capIa.tentativas = (capIa.tentativas || 0) + 1; if(capIa.tentativas < 4) setTimeout(function(){ capIa.conferido = false; capIaConferir(); }, 15000); }
+  });
+}
+(function vigia(n){ capIaConferir(); if(!capIa.conferido && n < 120) setTimeout(function(){ vigia(n + 1); }, 1000); })(0);
+
+function capIaInterpretar(conversas){
+  if(!capIa.ligada){
+    toast("A IA ainda não está ligada: falta cadastrar a chave da Anthropic no servidor (ANTHROPIC_API_KEY).");
+    return;
+  }
+  var lista = (conversas || Object.keys(CAP_TXT)).filter(function(c){ return CAP_TXT[c] && String(CAP_TXT[c]).trim(); });
+  if(!lista.length){ toast("Não há conversa lida para interpretar."); return; }
+  var opcoes = {categoria: capIaRotulos("categoria"), subcategoria: capIaRotulos("subcategoria"), prioridade: capIaRotulos("prioridade")};
+  lista.forEach(function(conv){
+    var texto = String(CAP_TXT[conv]).replace(/ - \[eu\] /g, " - (TI) ");
+    if(texto.length > 120000) texto = texto.slice(texto.length - 120000);
+    capIa.rodando++; capIaPintarBotao();
+    capIaStatusTexto("A IA está lendo " + (lista.length > 1 ? lista.length + " conversas" : "“" + conv + "”") + "…");
+    acPedir({acao: "ia.interpretar", conversa: conv, texto: texto, tecnicos: capIaTecnicos(), opcoes: opcoes}).then(function(j){
+      var regras = impCandidatos.filter(function(c){ return c.conversa === conv; });
+      var primeiro = regras.reduce(function(m, c){ return c.quando && (!m || c.quando < m) ? c.quando : m; }, null);
+      var novos = (j.pedidos || []).map(function(p){
+        var c = {quem: p.quem || conv, texto: p.titulo, quando: capIaData(p.quando, primeiro), conversa: conv,
+                 marcada: p.confianca >= 0.6, motivo: "", ia: p};
+        if(fila.some(function(it){ return it.oque === c.texto && it.quem === c.quem; })){ c.marcada = false; c.motivo = "já está na fila"; }
+        else if(p.confianca < 0.6) c.motivo = "a IA não tem certeza de que é pedido";
+        return c;
+      });
+      impCandidatos = impCandidatos.filter(function(c){ return c.conversa !== conv; }).concat(novos);
+      impCandidatos.sort(function(a, b){ return (a.quando || 0) - (b.quando || 0); });
+      CAP_IA_FEITO[conv] = CAP_TXT[conv].length;
+      pintarImport();
+      var abertos = novos.filter(function(c){ return c.ia.situacao !== "resolvido"; }).length;
+      toast("IA: " + novos.length + (novos.length === 1 ? " pedido" : " pedidos") + " em “" + conv + "”" +
+        (novos.length ? " (" + abertos + " em aberto, " + (novos.length - abertos) + " já resolvidos na conversa)." : "."));
+    }, function(e){
+      toast("A IA não conseguiu ler “" + conv + "”: " + e.message + " A lista das regras continua valendo.");
+    }).then(function(){
+      capIa.rodando--; capIaPintarBotao();
+      if(!capIa.rodando) capIaStatusTexto("");
+    });
+  });
+}
+
+/* cada linha que veio da IA mostra o que ela entendeu */
+var capPintarImpOrig = pintarImport;
+pintarImport = function(){
+  capPintarImpOrig.apply(this, arguments);
+  Array.prototype.forEach.call(document.querySelectorAll("#impLista .imp-cx, #impDescartados .imp-cx"), function(cx){
+    var c = impCandidatos[+cx.getAttribute("data-i")];
+    if(!c || !c.ia) return;
+    var li = cx.closest("li"), alvo = li && li.querySelector(".imp-txt");
+    if(!alvo || alvo.querySelector(".cap-ia")) return;
+    var p = c.ia, sit = {resolvido: ["ok", "resolvido na conversa"], em_andamento: ["warn", "TI já respondeu"], aberto: ["crit", "sem resposta da TI"]}[p.situacao] || ["neutral", p.situacao];
+    var cls = [p.categoria, p.subcategoria].filter(Boolean).join(" › ");
+    var d = document.createElement("div");
+    d.className = "cap-ia";
+    d.innerHTML = '<span class="tag ' + sit[0] + '">' + esc(sit[1]) + "</span>" +
+      (cls ? '<span class="tag neutral">' + esc(cls) + "</span>" : "") +
+      (p.prioridade ? '<span class="tag neutral">' + esc(p.prioridade) + "</span>" : "") +
+      '<span class="cap-ia-ia">IA</span>' +
+      (p.descricao ? '<div class="cap-ia-d">' + esc(p.descricao) + (p.resolucao ? " <b>Feito:</b> " + esc(p.resolucao) : "") + "</div>" : "");
+    alvo.appendChild(d);
+  });
+};
+
+/* ao mandar para a fila, o que a IA entendeu vai junto: classificação já
+   escolhida (em destaque, para conferir) e a descrição no campo Detalhes */
+var capIaLevando = [];
+if($("impMandar")) $("impMandar").addEventListener("click", function(){
+  capIaLevando = impCandidatos.filter(function(c){ return c.marcada && c.ia; })
+    .map(function(c){ return {quem: c.quem, texto: c.texto, ia: c.ia, conversa: c.conversa}; });
+  setTimeout(function(){
+    var mexeu = 0;
+    capIaLevando.forEach(function(x){
+      var it = fila.filter(function(f){ return !f.chamado && !f.ia && f.oque === x.texto && f.quem === x.quem; })[0];
+      if(!it) return;
+      it.ia = true; it.sugFeito = true; it.sug = [];
+      CLS_LINHA.forEach(function(f){ var id = capIdDe(f, x.ia[f]); if(id){ it[f] = id; it.sug.push(f); } });
+      it.detalhe = [x.ia.descricao, x.ia.resolucao ? "Resolvido na conversa: " + x.ia.resolucao : "",
+                    "Origem: WhatsApp, " + x.conversa + "."].filter(Boolean).join("\n\n");
+      mexeu++;
+    });
+    capIaLevando = [];
+    if(mexeu){ save(K.fila, fila); renderFila(); }
+  }, 0);
+}, true);
+var capCamposOrig = camposDaAnotacao;
+camposDaAnotacao = function(item){
+  var f = capCamposOrig.apply(this, arguments);
+  if(item && item.detalhe) f[B.campo.detalhes] = item.detalhe;
+  return f;
+};
+
+(function(){
+  var topo = $("impMandar") && $("impMandar").parentNode;
+  if(!topo) return;
+  var b = document.createElement("button");
+  b.type = "button"; b.className = "ghost"; b.id = "capIaBtn"; b.hidden = true;
+  topo.insertBefore(b, $("impMandar"));
+  b.addEventListener("click", function(){ capIaInterpretar(); });
+  var st = document.createElement("div");
+  st.className = "hint"; st.id = "capIaStatus"; st.hidden = true;
+  topo.parentNode.insertBefore(st, topo.nextSibling);
+  var s = document.createElement("style");
+  s.textContent = ".cap-ia{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:5px}" +
+    ".cap-ia .tag{font-size:.68rem}" +
+    ".cap-ia-ia{font-size:.62rem;font-weight:700;letter-spacing:.05em;color:var(--laranja);border:1px solid var(--laranja);border-radius:4px;padding:0 4px}" +
+    ".cap-ia-d{flex-basis:100%;color:var(--muted);font-size:.78rem;line-height:1.35}" +
+    "#capIaStatus{margin:6px 0 0}";
+  document.head.appendChild(s);
+  capIaPintarBotao();
 })();
