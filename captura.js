@@ -271,10 +271,13 @@ function capWaReceber(conversa, texto, versao){
   var pedidos = novos.filter(function(c){ return !c.motivo; }).length;
   var aba = document.querySelector('nav.tabs button[data-tab="captura"]'); if(aba) aba.click();
   var ci = $("cardImportar"); if(ci && ci.scrollIntoView) ci.scrollIntoView({block: "start"});
-  if(novos.length) CAP_AUTO[conversa || "WhatsApp Web"] = 1;
-  if(novos.length && capIa.ligada) capIaInterpretar([conversa || "WhatsApp Web"]);
+  /* conversa já lida antes: quem decide se há algo novo é a seção 10 (as
+     regras juntam mensagens seguidas e podem esconder a última) */
+  var lido = capIaLido(conversa || "WhatsApp Web");
+  if(novos.length || lido) CAP_AUTO[conversa || "WhatsApp Web"] = 1;
+  if((novos.length || lido) && capIa.ligada) capIaInterpretar([conversa || "WhatsApp Web"]);
   else if(novos.length && !capIa.conferido && SERVIDOR.url) toast("Conversa recebida. A IA lê assim que a conexão com o servidor terminar…");
-  else if(!novos.length && capIaLido(conversa)) capIaAvisarPulo([{conv: conversa, pula: "nada novo", lido: capIaLido(conversa)}]);
+  else if(!novos.length && lido) capIaAvisarPulo([{conv: conversa, pula: "nada novo", lido: lido}]);
   else toast(novos.length ? conversa + ": " + pedidos + (pedidos === 1 ? " pedido" : " pedidos") +
     (entraram < novos.length ? " (" + (novos.length - entraram) + " já estavam na lista)" : "") + ". Confira e mande para a fila."
     : "Nada reconhecido na conversa " + conversa + ".");
@@ -497,8 +500,18 @@ function capIaInterpretar(conversas, modo){
         else if(p.confianca < 0.6) c.motivo = "a IA não tem certeza de que é pedido";
         return c;
       });
+      /* pedido do "já lido" que a TI respondeu agora volta com o mesmo quem e
+         a mesma hora: substitui o da lista, e se já foi para a fila não entra de novo */
+      var mesmo = function(a, b){ return a.quem === b.quem && a.quando && b.quando && Math.abs(a.quando - b.quando) <= 60000; };
+      novos.forEach(function(c){
+        if(c.motivo || !f.lido || !c.quando || c.quando.getTime() > f.lido.ate) return;
+        if(fila.some(function(it){ return it.quem === c.quem && it.iso && Math.abs(new Date(it.iso) - c.quando) <= 60000; })){
+          c.marcada = false; c.motivo = "já está na fila (a TI respondeu depois)";
+        }
+      });
       /* o que a IA já tinha lido antes nesta conversa fica; o resto dela é trocado */
-      var ficam = modo === "tudo" ? [] : impCandidatos.filter(function(c){ return c.conversa === conv && c.ia && c.ia.fonte !== "regras"; });
+      var ficam = modo === "tudo" ? [] : impCandidatos.filter(function(c){ return c.conversa === conv && c.ia && c.ia.fonte !== "regras" &&
+        !novos.some(function(x){ return mesmo(c, x); }); });
       impCandidatos = impCandidatos.filter(function(c){ return c.conversa !== conv; }).concat(ficam, novos);
       impCandidatos.sort(function(a, b){ return (a.quando || 0) - (b.quando || 0); });
       CAP_IA_FEITO[conv] = CAP_TXT[conv].length;
