@@ -274,6 +274,7 @@ function capWaReceber(conversa, texto, versao){
   if(novos.length) CAP_AUTO[conversa || "WhatsApp Web"] = 1;
   if(novos.length && capIa.ligada) capIaInterpretar([conversa || "WhatsApp Web"]);
   else if(novos.length && !capIa.conferido && SERVIDOR.url) toast("Conversa recebida. A IA lê assim que a conexão com o servidor terminar…");
+  else if(!novos.length && capIaLido(conversa)) capIaAvisarPulo([{conv: conversa, pula: "nada novo", lido: capIaLido(conversa)}]);
   else toast(novos.length ? conversa + ": " + pedidos + (pedidos === 1 ? " pedido" : " pedidos") +
     (entraram < novos.length ? " (" + (novos.length - entraram) + " já estavam na lista)" : "") + ". Confira e mande para a fila."
     : "Nada reconhecido na conversa " + conversa + ".");
@@ -466,7 +467,7 @@ function capIaConferir(){
 }
 (function vigia(n){ capIaConferir(); if(!capIa.conferido && n < 120) setTimeout(function(){ vigia(n + 1); }, 1000); })(0);
 
-function capIaInterpretar(conversas){
+function capIaInterpretar(conversas, modo){
   if(!capIa.ligada){
     toast("A IA ainda não está ligada: falta cadastrar o acesso da Cloudflare (CF_ACCOUNT_ID e CF_API_TOKEN) no servidor.");
     return;
@@ -474,12 +475,19 @@ function capIaInterpretar(conversas){
   var lista = (conversas || Object.keys(CAP_TXT)).filter(function(c){ return CAP_TXT[c] && String(CAP_TXT[c]).trim(); });
   if(!lista.length){ toast("Não há conversa lida para interpretar."); return; }
   var opcoes = {categoria: capIaRotulos("categoria"), subcategoria: capIaRotulos("subcategoria"), prioridade: capIaRotulos("prioridade")};
+  var pulos = [];
+  capIaLimparPulo();
   lista.forEach(function(conv){
-    var texto = String(CAP_TXT[conv]).replace(/ - \[eu\] /g, " - (TI) ");
-    if(texto.length > 120000) texto = texto.slice(texto.length - 120000);
+    /* só o que é novo desde a última leitura, sem o ruído (seção 10) */
+    var f = capIaFatiar(conv, modo);
+    if(f.pula){
+      if(f.pula === "sem pedido"){ capIaLidoAntes[conv] = f.lido; capIaMarcar(conv, f.msgs); }
+      pulos.push({conv: conv, pula: f.pula, lido: f.lido});
+      return;
+    }
     capIa.rodando++; capIaPintarBotao();
     capIaStatusTexto("A IA está lendo " + (lista.length > 1 ? lista.length + " conversas" : "“" + conv + "”") + "…");
-    acPedir({acao: "ia.interpretar", conversa: conv, texto: texto, tecnicos: capIaTecnicos(), opcoes: opcoes}).then(function(j){
+    acPedir({acao: "ia.interpretar", conversa: conv, texto: f.texto, contexto: f.contexto, tecnicos: capIaTecnicos(), opcoes: opcoes}).then(function(j){
       var regras = impCandidatos.filter(function(c){ return c.conversa === conv; });
       var primeiro = regras.reduce(function(m, c){ return c.quando && (!m || c.quando < m) ? c.quando : m; }, null);
       var novos = (j.pedidos || []).map(function(p){
@@ -489,14 +497,18 @@ function capIaInterpretar(conversas){
         else if(p.confianca < 0.6) c.motivo = "a IA não tem certeza de que é pedido";
         return c;
       });
-      impCandidatos = impCandidatos.filter(function(c){ return c.conversa !== conv; }).concat(novos);
+      /* o que a IA já tinha lido antes nesta conversa fica; o resto dela é trocado */
+      var ficam = modo === "tudo" ? [] : impCandidatos.filter(function(c){ return c.conversa === conv && c.ia && c.ia.fonte !== "regras"; });
+      impCandidatos = impCandidatos.filter(function(c){ return c.conversa !== conv; }).concat(ficam, novos);
       impCandidatos.sort(function(a, b){ return (a.quando || 0) - (b.quando || 0); });
       CAP_IA_FEITO[conv] = CAP_TXT[conv].length;
+      capIaMarcar(conv, f.msgs);
       if(j.uso) capUsoPintar(j.uso);
       pintarImport();
       var abertos = novos.filter(function(c){ return c.ia.situacao !== "resolvido"; }).length;
       toast("IA: " + novos.length + (novos.length === 1 ? " pedido" : " pedidos") + " em “" + conv + "”" +
-        (novos.length ? " (" + abertos + " em aberto, " + (novos.length - abertos) + " já resolvidos na conversa)." : "."));
+        (novos.length ? " (" + abertos + " em aberto, " + (novos.length - abertos) + " já resolvidos na conversa)" : "") +
+        (f.contexto ? ", só as mensagens novas" : "") + (j.gasto ? ". Gastou " + j.gasto.neurons + " da cota." : "."));
     }, function(e){
       toast("A IA não conseguiu ler “" + conv + "”: " + e.message + " A lista das regras continua valendo.");
       capUsoAtualizar();
@@ -505,6 +517,7 @@ function capIaInterpretar(conversas){
       if(!capIa.rodando) capIaStatusTexto("");
     });
   });
+  if(pulos.length) capIaAvisarPulo(pulos);
 }
 
 /* cada linha que veio da IA mostra o que ela entendeu */
@@ -670,7 +683,7 @@ candidatosDe = function(txt, conversa){
    (tabela ia_uso, sem o texto da conversa) e devolve o total do dia e quem
    gastou quanto; aqui vira uma barra no cartão do WhatsApp. É estimativa pela
    tabela de preços da Cloudflare: o número oficial fica no painel dela. */
-var CAP_LEITURA_MEDIA = 350;
+var CAP_LEITURA_MEDIA = 250;
 function capUsoZera(){
   var a = new Date(), z = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate() + 1));
   return ("0" + z.getHours()).slice(-2) + "h" + (z.getMinutes() ? ("0" + z.getMinutes()).slice(-2) : "");
@@ -693,7 +706,7 @@ function capUsoPintar(u){
       (u.esgotou ? "A Cloudflare recusou por falta de cota. Até zerar, a Captura separa os pedidos pelas regras. Nada é cobrado."
                  : "Dá para mais ~" + sobra + (sobra === 1 ? " leitura" : " leituras") + " hoje, somando todo mundo" +
                    (leituras ? " (média de hoje: " + n(Math.round(media)) + " por leitura)." : " (estimativa de uma conversa média).") +
-                   " Role só até a última captura para gastar menos.") + "</div>" +
+                   " Só as mensagens novas de cada grupo vão para a IA.") + "</div>" +
     (u.pessoas.length ? '<div class="cap-uso-gente">' + u.pessoas.map(function(p){
       return '<span class="tag neutral">' + esc(String(p.nome).split(" ")[0]) + (p.eu ? " (você)" : "") + ": " + n(p.neurons) +
         " · " + p.leituras + (p.leituras === 1 ? " leitura" : " leituras") + "</span>";
@@ -722,4 +735,119 @@ function capUsoAtualizar(){
   document.head.appendChild(s);
   /* o colega também gasta: a barra se atualiza a cada 5 minutos */
   setInterval(function(){ if(!document.hidden) capUsoAtualizar(); }, 300000);
+})();
+
+/* ---------- 10. gastar menos da cota (v42) ----------
+   1. Só o que é novo: cada conversa guarda (neste navegador) até onde a IA já
+      leu. A captura seguinte manda só as mensagens depois disso, com as 6
+      anteriores como contexto ("já lido", a IA não cria item a partir delas).
+      Os pedidos antigos também saem da lista das regras: já foram vistos.
+   2. Sem ruído: "bom dia", "ok", "kkk", figurinha, mídia oculta, mensagem
+      apagada e aviso do sistema não vão. Mensagem enorme é cortada. A conversa
+      vai agrupada por dia ("== 24/11/2026 ==", depois só a hora), e mensagens
+      seguidas da mesma pessoa vão numa linha só.
+   3. Sem chamar à toa: se não há nada novo, ou se no trecho novo não há nada
+      com cara de pedido nem resposta da TI, a IA não é chamada. Um botão deixa
+      ler mesmo assim. */
+var CAP_LIDO_K = "ctip.iaLido";
+var capIaLidoAntes = {};   /* trecho pulado por ser só conversa: "ler mesmo assim" volta a esta marca */
+var CAP_CONTEXTO_N = 6, CAP_MSG_MAX = 800;
+var CAP_RE_RUIDO_IA = /^\s*(bom dia|boa tarde|boa noite|ok+|okay|blz|beleza|valeu|vlw|obg|de nada|por nada|imagina|tudo bem|tudo certo|tudo bom|show|top|perfeito|t[áa] bom|ta bom|oi+|ol[áa]|e a[íi]|bom fim de semana|boa semana|at[ée] mais|abra[çc]o[s]?|fechou|combinado|aham|uhum|k{2,}|rs+|hahah*)([\s,!.…]+(pessoal|galera|gente|time|todos|a todos))?[\s!?.…,]*$/i;
+
+function capIaLido(conv){ var l = load(CAP_LIDO_K, {}); return l && l[conv] ? l[conv] : null; }
+function capIaAssin(m){ return (m.quem + "|" + m.texto).slice(0, 80); }
+function capIaMsgs(txt){
+  return lerConversa(txt || "").map(function(m){
+    var eu = /^\[eu\] /.test(m.quem), quem = eu ? m.quem.slice(5) : m.quem;
+    var t = String(m.texto).replace(/\s*\n\s*/g, " / ").replace(/\s+/g, " ").trim();
+    if(t.length > CAP_MSG_MAX) t = t.slice(0, CAP_MSG_MAX) + "…(cortado)";
+    return {quando: m.quando, quem: quem, ti: eu || ehIgnorado(quem), texto: t, cru: m.quem + "|" + m.texto};
+  }).filter(function(m){ return m.texto && !soSimbolos(m.texto) && !CAP_RE_RUIDO_IA.test(m.texto); });
+}
+function capIaDia(d){ return ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear(); }
+function capIaHora(d){ return d ? ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2) : "--:--"; }
+function capIaFormatar(msgs){
+  var linhas = [], dia = "", ult = null;
+  msgs.forEach(function(m){
+    var d = m.quando ? capIaDia(m.quando) : dia;
+    if(d && d !== dia){ linhas.push("== " + d + " =="); dia = d; ult = null; }
+    if(ult && ult.quem === m.quem && ult.ti === m.ti && m.quando && ult.quando && m.quando - ult.quando <= 10 * 60000){
+      linhas[linhas.length - 1] += " / " + m.texto; return;
+    }
+    linhas.push(capIaHora(m.quando) + " " + (m.ti ? "(TI) " : "") + m.quem + ": " + m.texto);
+    ult = m;
+  });
+  return linhas.join("\n");
+}
+/* o trecho que vai para a IA. modo: "" = só o novo; "forcar" = o novo mesmo
+   sem cara de pedido; "tudo" = a conversa inteira de novo */
+function capIaFatiar(conv, modo){
+  var msgs = capIaMsgs(CAP_TXT[conv]);
+  var lido = modo === "tudo" ? null : (modo === "forcar" && conv in capIaLidoAntes ? capIaLidoAntes[conv] : capIaLido(conv));
+  var novas = msgs, antes = [];
+  if(lido){
+    novas = msgs.filter(function(m){
+      var t = m.quando ? m.quando.getTime() : 0;
+      return t > lido.ate || (t === lido.ate && (lido.assin || []).indexOf(capIaAssin(m)) === -1);
+    });
+    var i0 = novas.length ? msgs.indexOf(novas[0]) : msgs.length;
+    antes = msgs.slice(Math.max(0, i0 - CAP_CONTEXTO_N), i0);
+  }
+  var texto = capIaFormatar(novas);
+  while(texto.length > 110000 && novas.length > 1){ novas = novas.slice(Math.ceil(novas.length / 10)); texto = capIaFormatar(novas); }
+  var temTI = novas.some(function(m){ return m.ti; });
+  var temPedido = novas.some(function(m){ return !m.ti && (RE_PALAVRAS.test(m.texto) || /\?/.test(m.texto)); });
+  var pula = !novas.length ? "nada novo" : (modo !== "forcar" && modo !== "tudo" && !temTI && !temPedido ? "sem pedido" : "");
+  return {msgs: msgs, novas: novas, lido: lido, pula: pula, texto: texto, contexto: antes.length ? capIaFormatar(antes) : ""};
+}
+function capIaMarcar(conv, msgs){
+  var ate = 0;
+  msgs.forEach(function(m){ var t = m.quando ? m.quando.getTime() : 0; if(t > ate) ate = t; });
+  if(!ate) return;
+  var l = load(CAP_LIDO_K, {}) || {}, ant = l[conv];
+  if(ant && ant.ate > ate) return;
+  var assin = msgs.filter(function(m){ return m.quando && m.quando.getTime() === ate; }).map(capIaAssin);
+  if(ant && ant.ate === ate) (ant.assin || []).forEach(function(a){ if(assin.indexOf(a) === -1) assin.push(a); });
+  l[conv] = {ate: ate, assin: assin.slice(0, 50), em: Date.now()};
+  var ks = Object.keys(l);
+  if(ks.length > 200) ks.sort(function(a, b){ return (l[a].em || 0) - (l[b].em || 0); }).slice(0, ks.length - 200).forEach(function(k){ delete l[k]; });
+  save(CAP_LIDO_K, l);
+}
+/* pedidos de antes da última leitura já foram vistos: as regras não os
+   trazem de novo (o botão "ler a conversa inteira" traz) */
+var capCandLido = candidatosDe;
+candidatosDe = function(txt, conversa){
+  var r = capCandLido.apply(this, arguments);
+  var l = conversa ? capIaLido(conversa) : null;
+  if(!l) return r;
+  return r.filter(function(c){ return !c.quando || c.quando.getTime() > l.ate; });
+};
+function capIaLimparPulo(){ var el = $("capIaPulo"); if(el){ el.hidden = true; el.innerHTML = ""; } }
+function capIaAvisarPulo(pulos){
+  var el = $("capIaPulo"); if(!el) return;
+  el.hidden = false;
+  el.innerHTML = pulos.map(function(p, k){
+    var quando = p.lido && p.lido.ate ? new Date(p.lido.ate) : null;
+    var desde = quando ? " desde a última leitura (" + capIaDia(quando).slice(0, 5) + " " + capIaHora(quando) + ")" : "";
+    return '<div class="cap-pulo">' + (p.pula === "nada novo"
+      ? "Nada novo em <b>" + esc(p.conv) + "</b>" + esc(desde) + ". A IA não foi chamada."
+      : "Em <b>" + esc(p.conv) + "</b> só há conversa, sem pedido nem resposta da TI. A IA não foi chamada.") +
+      ' <button type="button" class="ghost" data-k="' + k + '">' + (p.pula === "nada novo" ? "Ler a conversa inteira com a IA" : "Ler com a IA mesmo assim") + "</button></div>";
+  }).join("");
+  Array.prototype.forEach.call(el.querySelectorAll("button[data-k]"), function(b){
+    b.addEventListener("click", function(){
+      var p = pulos[+b.getAttribute("data-k")];
+      capIaInterpretar([p.conv], p.pula === "nada novo" ? "tudo" : "forcar");
+    });
+  });
+}
+(function(){
+  var st = $("capIaStatus"); if(!st) return;
+  var d = document.createElement("div");
+  d.className = "hint"; d.id = "capIaPulo"; d.hidden = true;
+  st.parentNode.insertBefore(d, st.nextSibling);
+  var s = document.createElement("style");
+  s.textContent = "#capIaPulo{margin:6px 0 0}.cap-pulo{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:4px}" +
+    ".cap-pulo button{padding:3px 10px;font-size:.78rem}";
+  document.head.appendChild(s);
 })();
