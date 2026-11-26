@@ -16,7 +16,7 @@ var CACHE = "chamados-ti-1";
 var ARQUIVOS = ["./", "estilo.css", "tema.css", "manifest.webmanifest", "icone.svg",
   "config.js", "util.js", "bitrix.js", "painel.js", "dash.js", "etiquetas.js", "kanban.js", "relatorio.js",
   "importar.js", "doc.js", "tarefas.js", "parecidos.js", "diagnostico.js", "cronometro.js",
-  "app.js", "modelos.js", "boot.js", "instalar.js", "extras.js", "inventario.js", "qr.js", "mais.js", "servico.js", "parque.js", "captura.js", "solicitante.js", "acesso.js", "avaliar.html"];
+  "app.js", "modelos.js", "boot.js", "instalar.js", "extras.js", "inventario.js", "qr.js", "mais.js", "servico.js", "parque.js", "captura.js", "solicitante.js", "audio.js", "acesso.js", "avaliar.html"];
 
 self.addEventListener("install", function(e){
   /* um arquivo que falhe não impede os outros: a cópia se completa no uso */
@@ -35,22 +35,36 @@ self.addEventListener("activate", function(e){
 /* "compartilhar" do celular (página instalada no Android): o WhatsApp manda a
    conversa exportada para ./compartilhar. Guarda o texto na cópia local e abre a
    Captura, que lê e apaga (ver captura.js). Nada sai do aparelho. */
+/* v45: conversa com mídia (.zip) e áudio vêm inteiros, guardados à parte na
+   cópia local; a Captura (audio.js) abre o .zip, transcreve os áudios e apaga. */
+var BIN_MAX = 60 * 1024 * 1024;
+function ehBinario(f){
+  return /zip|audio\//i.test(f.type || "") || /\.(zip|opus|ogg|oga|m4a|mp3|aac|wav|amr|webm|3gp)$/i.test(f.name || "");
+}
 function receberCompartilhado(req){
+  var destino = "./?compartilhado=1#captura";
   return req.formData().then(function(fd){
     var arquivos = fd.getAll("arquivos").filter(function(f){ return f && typeof f !== "string"; });
-    return Promise.all(arquivos.slice(0, 10).map(function(f){
-      var zip = /zip/i.test(f.type || "") || /\.zip$/i.test(f.name || "");
-      if(zip || f.size > 5 * 1024 * 1024) return {nome: f.name || "arquivo", texto: "", zip: zip};
-      return f.text().then(function(t){ return {nome: f.name || "conversa.txt", texto: t}; });
-    })).then(function(lidos){
-      var texto = [fd.get("titulo"), fd.get("texto")].filter(function(x){ return typeof x === "string" && x.trim(); }).join("\n");
-      return caches.open(CACHE).then(function(c){
-        return c.put("./__compartilhado.json", new Response(JSON.stringify({arquivos: lidos, texto: texto}),
-          {headers: {"Content-Type": "application/json"}}));
+    var temBin = arquivos.some(ehBinario);
+    return caches.open(CACHE).then(function(c){
+      return Promise.all(arquivos.slice(0, 20).map(function(f, i){
+        if(ehBinario(f)){
+          if(f.size > BIN_MAX) return {nome: f.name || "arquivo", texto: "", grande: true};
+          var chave = "./__compartilhado-bin-" + i;
+          return c.put(chave, new Response(f, {headers: {"Content-Type": f.type || "application/octet-stream"}}))
+            .then(function(){ return {nome: f.name || "arquivo", chave: chave, tipo: f.type || ""}; });
+        }
+        if(f.size > 5 * 1024 * 1024) return {nome: f.name || "arquivo", texto: ""};
+        return f.text().then(function(t){ return {nome: f.name || "conversa.txt", texto: t}; });
+      })).then(function(lidos){
+        var texto = [fd.get("titulo"), fd.get("texto")].filter(function(x){ return typeof x === "string" && x.trim(); }).join("\n");
+        if(temBin) destino = "./?compartilhadoAudio=1#captura";
+        return c.put(temBin ? "./__compartilhado-bin.json" : "./__compartilhado.json",
+          new Response(JSON.stringify({arquivos: lidos, texto: texto}), {headers: {"Content-Type": "application/json"}}));
       });
     });
   }).catch(function(){}).then(function(){
-    return Response.redirect(new URL("./?compartilhado=1#captura", self.registration.scope).href, 303);
+    return Response.redirect(new URL(destino, self.registration.scope).href, 303);
   });
 }
 self.addEventListener("fetch", function(e){
