@@ -205,7 +205,12 @@ function audProcessar(lotes, soltos){
     var ci = $("cardImportar"); if(ci && ci.scrollIntoView) ci.scrollIntoView({block: "start"});
     return lidas;
   };
-  if(!tarefas.length) return Promise.resolve(terminar());
+  if(!tarefas.length){
+    var r0 = terminar();
+    /* .zip sem áudio que a conversa cite: diz o que achou, em vez de ficar calado */
+    if(audDiag.length) audStatus("Nenhum áudio para transcrever. No arquivo: " + audDiag.join("; ") + ".", true);
+    return Promise.resolve(r0);
+  }
   if(!SERVIDOR.url){
     audStatus("Os áudios precisam do servidor (login) para virar texto. A conversa foi lida sem eles.", true);
     return Promise.resolve(audSubstituir(tarefas, false)).then(terminar);
@@ -250,7 +255,7 @@ function audSubstituir(tarefas, tentou){
   tarefas.forEach(function(t){
     var troca = t.texto ? "(áudio) " + t.texto : "(áudio não transcrito" + (t.erro ? ": " + t.erro : "") + ")";
     if(t.solto){ t.solto.texto = t.texto || ""; t.solto.erro = t.erro || (tentou ? "" : "não transcrito"); return; }
-    var re = new RegExp("(?:<\\s*anexado:\\s*)?" + audEscapar(t.nome) + "(?:\\s*>)?(?:\\s*\\((?:arquivo anexado|file attached)\\))?", "g");
+    var re = new RegExp("(?:<\\s*(?:anexado|attached):\\s*)?" + audEscapar(t.nome) + "(?:\\s*>)?(?:\\s*\\((?:arquivo anexado|file attached)\\))?", "g");
     t.lote.texto = t.lote.texto.replace(re, function(){ return troca; });
   });
 }
@@ -263,8 +268,10 @@ function audLer(texto, conversa){
 }
 
 /* ---------- arquivos escolhidos no campo da Captura ---------- */
+var audDiag = [];   /* o que tinha em cada .zip, para o aviso quando nada vira áudio */
 function audLerArquivos(arquivos, nomeZip){
   var lotes = [], soltos = [], txts = [];
+  audDiag = [];
   return Promise.all(arquivos.map(function(f){
     if(audEhZip(f.name, f.type)){
       return f.arrayBuffer().then(audZip).then(function(itens){
@@ -273,7 +280,10 @@ function audLerArquivos(arquivos, nomeZip){
           if(/\.txt$/i.test(it.nome) && !txt){ txt = new TextDecoder("utf-8").decode(it.dados); conv = it.nome; }
           else if(audEhAudio(it.nome)) audios[it.nome] = new Blob([it.dados], {type: /\.(opus|ogg|oga)$/i.test(it.nome) ? "audio/ogg" : ""});
         });
-        if(txt) lotes.push({conversa: nomeDaConversa(/^_chat\.txt$/i.test(conv) ? f.name.replace(/\.zip$/i, ".txt") : conv), texto: txt, audios: audios});
+        var nAud = Object.keys(audios).length, citados = txt ? Object.keys(audios).filter(function(n){ return txt.indexOf(n) !== -1; }).length : 0;
+        audDiag.push(esc(f.name) + ": " + (txt ? "conversa" : "sem conversa") + ", " + nAud + (nAud === 1 ? " áudio" : " áudios") +
+          (txt && nAud ? " (" + citados + " citados na conversa)" : "") + ", " + itens.length + " arquivos");
+        if(txt) lotes.push({conversa: nomeDaConversa(/^_?chat\.txt$/i.test(conv) ? f.name.replace(/\.zip$/i, ".txt") : conv), texto: txt, audios: audios});
         else Object.keys(audios).forEach(function(n){ soltos.push({nome: n, blob: audios[n], quando: new Date(f.lastModified || Date.now())}); });
       }, function(e){ audStatus("Não consegui abrir " + esc(f.name) + ": " + esc(e.message || "erro") + ".", true); });
     }
@@ -338,3 +348,54 @@ function audLerCompartilhado(){
   }).catch(function(){});
 }
 audLerCompartilhado();
+
+/* ---------- v46: o que o primeiro teste real mostrou ----------
+   1. Celular em inglês exporta a data como mês/dia (11/26/26, 4:22 PM). O
+      leitor lia dia/mês: 26 virava "mês 26" e a data caía em 2028. Agora, se em
+      algum carimbo da conversa o segundo número passa de 12, a conversa inteira
+      é lida como mês/dia.
+   2. Por causa disso ficou marcada uma leitura "até 2028", e toda captura nova
+      daquela conversa parecia já lida. Marca no futuro é ignorada e apagada.
+   3. Conversa sem os áudios (exportada sem mídia, .txt tirado de dentro do
+      .zip, ou o botão do WhatsApp Web, que não pega áudio): aviso dizendo
+      como trazer os áudios, em vez de a IA ler só o resto calada. */
+var audUS = false;
+var audLerConversaOrig = lerConversa;
+lerConversa = function(txt){
+  var s = limparInvisiveis(String(txt || "")), re = /^\s*\[?\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/gm, m, k = 0, us = false;
+  while((m = re.exec(s)) && k++ < 2000){
+    if(+m[1] > 12) break;                              /* dia/mês */
+    if(+m[2] > 12){ us = true; break; }               /* mês/dia */
+  }
+  var antes = audUS; audUS = us;
+  try{ return audLerConversaOrig.apply(this, arguments); } finally{ audUS = antes; }
+};
+var audDataOrig = dataDoCarimbo;
+dataDoCarimbo = function(m){
+  if(!audUS || !m) return audDataOrig(m);
+  var t = Array.prototype.slice.call(m); t[1] = m[2]; t[2] = m[1];
+  return audDataOrig(t);
+};
+if(typeof capIaLido === "function"){
+  var audLidoOrig = capIaLido;
+  capIaLido = function(conv){
+    var l = audLidoOrig.apply(this, arguments);
+    if(l && l.ate && l.ate > Date.now() + 86400000){
+      var t = load(CAP_LIDO_K, {}) || {}; delete t[conv]; save(CAP_LIDO_K, t);
+      return null;
+    }
+    return l;
+  };
+}
+var AUD_RE_SEM = /([aá]udio ocultado|audio omitted|<\s*m[íi]dia oculta\s*>|<\s*media omitted\s*>|arquivo de m[íi]dia oculto|\bPTT-\d{8}-WA\d+\.opus|\bAUD-\d{8}-WA\d+\.\w{2,4}|\d{8}-AUDIO-[\d-]+\.opus)/i;
+var audCandOrig = candidatosDe;
+candidatosDe = function(txt, conversa){
+  var r = audCandOrig.apply(this, arguments);
+  var n = (String(txt || "").match(new RegExp(AUD_RE_SEM.source, "gi")) || []).length;
+  if(n) setTimeout(function(){
+    audStatus("Esta conversa tem " + (n === 1 ? "1 áudio ou mídia que não veio" : n + " áudios ou mídias que não vieram") + " junto. " +
+      "Para os áudios virarem texto: no celular, Exportar conversa → <b>Incluir mídia</b>, e escolha aqui o arquivo <b>.zip inteiro</b> " +
+      "(sem descompactar). O botão do WhatsApp Web não pega áudio.", true);
+  }, 50);
+  return r;
+};
