@@ -20,7 +20,7 @@
     "params": {
       "title": "titulo",
       "text": "texto",
-      "files": [{"name": "arquivos", "accept": ["text/plain", ".txt", "application/zip", ".zip"]}]
+      "files": [{"name": "arquivos", "accept": ["text/plain", ".txt", "application/zip", ".zip", "audio/*", ".opus", ".ogg", ".m4a", ".mp3", ".aac", ".wav"]}]
     }
   },
   "shortcuts": [
