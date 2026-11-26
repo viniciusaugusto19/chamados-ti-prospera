@@ -86,6 +86,12 @@ $("capQuem").focus();
   s.onload = s.onerror = function(){
     var t = document.createElement("script");
     t.src = "solicitante.js";
+    /* v45: áudio do WhatsApp vira texto (ver audio.js) */
+    t.onload = t.onerror = function(){
+      var a = document.createElement("script");
+      a.src = "audio.js";
+      document.body.appendChild(a);
+    };
     document.body.appendChild(t);
   };
   document.body.appendChild(s);
